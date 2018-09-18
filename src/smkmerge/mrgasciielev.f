@@ -71,7 +71,7 @@ C.........  EXTERNAL FUNCTIONS
      &                JUNIT, PROMPTFFILE, SECSDIFF, SEC2TIME
 
 C.........  LOCAL PARAMETERS
-        CHARACTER(50), PARAMETER :: CVSW = '$Name$'  ! CVS release tag
+        CHARACTER(50), PARAMETER :: CVSW = '$Name SMOKEv4.6_Sep2018$'  ! CVS release tag
         INTEGER,       PARAMETER :: MXPING = 300        ! final number of PinG sources
 
 C.........  LOCAL VARIABLES
@@ -1334,7 +1334,7 @@ C...........   Formatted file I/O formats............ 93xxx
 
 93090   FORMAT( 3(I8,1X) )
 
-93095   FORMAT( 3(I8,1X), A6, 1X, 2(A15,1X), F10.3 )
+93095   FORMAT( 3(I8,1X), A6, 1X, 2(A20,1X), F10.3 )
 
 C...........   Internal buffering formats.............94xxx
 
@@ -1399,7 +1399,7 @@ C...........   Formatted file I/O formats............ 93xxx
 
 93090   FORMAT( 3(I8,1X) )
 
-93095   FORMAT( 3(I8,1X), A6, 1X, 2(A15,1X), F10.3 )
+93095   FORMAT( 3(I8,1X), A6, 1X, 2(A20,1X), F10.3 )
 
 C...........   Internal buffering formats.............94xxx
 
@@ -1474,7 +1474,7 @@ C...........   Formatted file I/O formats............ 93xxx
 
 93090   FORMAT( 3(I8,1X) )
 
-93095   FORMAT( 3(I8,1X), A6, 1X, 2(A15,1X), F10.3 )
+93095   FORMAT( 3(I8,1X), A6, 1X, 2(A20,1X), F10.3 )
 
 C...........   Internal buffering formats.............94xxx
 
@@ -1602,7 +1602,7 @@ C...........   Formatted file I/O formats............ 93xxx
 
 93090   FORMAT( 3(I8,1X) )
 
-93095   FORMAT( 3(I8,1X), A6, 1X, 2(A15,1X), F10.3 )
+93095   FORMAT( 3(I8,1X), A6, 1X, 2(A20,1X), F10.3 )
 
 C...........   Internal buffering formats.............94xxx
 

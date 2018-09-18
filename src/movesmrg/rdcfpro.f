@@ -46,7 +46,7 @@ C.........  This module contains data structures and flags specific to Movesmrg
         USE MODMVSMRG, ONLY: CFPRO, EXPCFFLAG, REFCFFLAG
 
 C.........  This module contains the lists of unique source characteristics
-        USE MODLISTS, ONLY: NINVIFIP, INVIFIP, NINVSCC, INVSCC
+        USE MODLISTS, ONLY: NINVIFIP, INVCFIP, NINVSCC, INVSCC
 
 C.........  This module is used for reference county information
         USE MODMBSET, ONLY: NREFC, MCREFIDX, NINVC, MCREFSORT
@@ -78,7 +78,7 @@ C...........   SUBROUTINE ARGUMENTS
         INTEGER, INTENT (IN) :: CFDEV             ! CFPRO file unit no.
 
 C...........   Local allocatable arrays
-        CHARACTER(20)  SEGMENT( 10 )          ! parsed input line
+        CHARACTER(30)  SEGMENT( 10 )          ! parsed input line
 
         INTEGER, ALLOCATABLE :: NLFIPS( : )     ! FIPS matched
         INTEGER, ALLOCATABLE :: NLSCCS( : )     ! SCC matched
@@ -113,7 +113,7 @@ C...........   Local allocatable arrays
         CHARACTER(300),     ALLOCATABLE :: CFIPSCCLIST( : )          ! store matched entries
 
 C...........   Other local variables
-        INTEGER         I, J, K, L, M, N, NS, NX, NSCC, L1, L2    ! counters and indexes
+        INTEGER         I, J, K, L, M, N, NS, NX, L1, L2    ! counters and indexes
         INTEGER         IOS         ! error status
         INTEGER      :: IREC = 0    ! record counter
         INTEGER         NFIPS       ! total matched FIPS
@@ -147,7 +147,7 @@ C...........   Other local variables
         CHARACTER(300)     LINE     ! line buffer
         CHARACTER(300)     MESG     ! message buffer
         CHARACTER(2)       CMON, BLKMON, FILMON
-        CHARACTER(FIPLEN3) CFIP, BLKFIP          ! tmp (character) FIPS code : CHRT03
+        CHARACTER(FIPLEN3) CFIP, BLKFIP, CSTA    ! tmp (character) FIPS code : CHRT03
         CHARACTER(SCCLEN3) CSCC, BLKSCC          ! current SCC : CHRT04
         CHARACTER(IOVLEN3) POLNAM, SPCNAM, CBUF, CPOL, BLKPOL, FILPOL  ! current pollutant-species name 
         CHARACTER(FPSLEN3+CASLEN3+2) DUPTMP, CFIPSCC, BLKFIPSCC    ! tmp FIPS code // SCC : CHRT06
@@ -165,7 +165,7 @@ C.............  No of states
             NSTA = 0
             PSTA = 0
             DO I = 1 , NINVIFIP
-                ISTA = INT( INVIFIP( I ) / 1000 ) * 1000
+                ISTA = STR2INT( INVCFIP( I )( 8:9 ) )
                 IF( ISTA /= PSTA ) THEN
                     NSTA = NSTA + 1
                     PSTA = ISTA
@@ -259,8 +259,8 @@ C.............  Allocate locate FIPS/SCC hierarchy arrays
 C.............  Build FIPS and SCC hierarchy tables
             BLKMON = '00'
             FILMON = 'MM'
-            BLKFIP = '000000'
-            BLKSCC = '0000000000'
+            BLKFIP = '000000000000'
+            BLKSCC = '00000000000000000000'
             BLKPOL = '0000000000000000'
             FILPOL = 'PPPPPPPPPPPPPPPP'
 
@@ -270,53 +270,54 @@ C.............  Build FIPS and SCC hierarchy tables
             CHRTD3 = BLKFIP // BLKSCC // FILMON // FILPOL
 
             DO I = 1, NINVSCC
-                CHRT09( I ) = BLKFIP // INVSCC( I ) // BLKMON // BLKPOL
-                CHRT10( I ) = BLKFIP // INVSCC( I ) // BLKMON // FILPOL
-                CHRT11( I ) = BLKFIP // INVSCC( I ) // FILMON // BLKPOL
-                CHRT12( I ) = BLKFIP // INVSCC( I ) // FILMON // FILPOL
+                CSCC = INVSCC( I )
+                CHRT09( I ) = BLKFIP // CSCC // BLKMON // BLKPOL
+                CHRT10( I ) = BLKFIP // CSCC // BLKMON // FILPOL
+                CHRT11( I ) = BLKFIP // CSCC // FILMON // BLKPOL
+                CHRT12( I ) = BLKFIP // CSCC // FILMON // FILPOL
             END DO
-                
+
             N = 0
             NS = 0
-            NSTA = 0
-            PSTA = -1 
-            DO J = 1, NINVIFIP
+            PSTA = -1
+            DO J = 1 , NINVIFIP
+                ISTA = STR2INT( INVCFIP( J )( 8:9 ) )
+                IF( ISTA /= PSTA ) THEN
+                    NS = NS + 1
+                    WRITE( CSTA,'(I12.12)' ) ISTA  
+                    CHRT01( NS ) = CSTA // BLKSCC // BLKMON // BLKPOL
+                    CHRT02( NS ) = CSTA // BLKSCC // BLKMON // FILPOL
+                    CHRT03( NS ) = CSTA // BLKSCC // FILMON // BLKPOL
+                    CHRT04( NS ) = CSTA // BLKSCC // FILMON // FILPOL
 
-                WRITE( CHRT05(J),'(I6.6,A)' ) INVIFIP(J), BLKSCC // BLKMON // BLKPOL
-                WRITE( CHRT06(J),'(I6.6,A)' ) INVIFIP(J), BLKSCC // BLKMON // FILPOL
-                WRITE( CHRT07(J),'(I6.6,A)' ) INVIFIP(J), BLKSCC // FILMON // BLKPOL
-                WRITE( CHRT08(J),'(I6.6,A)' ) INVIFIP(J), BLKSCC // FILMON // FILPOL
+                    DO I = 1, NINVSCC
+                        N = N + 1
+                        CSCC = INVSCC( I )
+                        CHRT13( N ) = CSTA // CSCC // BLKMON // BLKPOL
+                        CHRT14( N ) = CSTA // CSCC // BLKMON // FILPOL
+                        CHRT15( N ) = CSTA // CSCC // FILMON // BLKPOL
+                        CHRT16( N ) = CSTA // CSCC // FILMON // FILPOL
+                    END DO
+                    PSTA = ISTA
+                END IF
+            END DO
+
+            N = 0
+            DO J = 1, NINVIFIP
+                CFIP = INVCFIP( J )
+                CHRT05( J ) = CFIP // BLKSCC // BLKMON // BLKPOL
+                CHRT06( J ) = CFIP // BLKSCC // BLKMON // FILPOL
+                CHRT07( J ) = CFIP // BLKSCC // FILMON // BLKPOL
+                CHRT08( J ) = CFIP // BLKSCC // FILMON // FILPOL
 
                 DO I = 1, NINVSCC
                     N = N + 1
-                    WRITE( CHRT17(N),'(I6.6,A)' ) INVIFIP(J), INVSCC(I) // BLKMON // BLKPOL
-                    WRITE( CHRT18(N),'(I6.6,A)' ) INVIFIP(J), INVSCC(I) // BLKMON // FILPOL
-                    WRITE( CHRT19(N),'(I6.6,A)' ) INVIFIP(J), INVSCC(I) // FILMON // BLKPOL
-                    WRITE( CHRT20(N),'(I6.6,A)' ) INVIFIP(J), INVSCC(I) // FILMON // FILPOL
+                    CSCC = INVSCC( I )
+                    CHRT17( N ) = CFIP // CSCC // BLKMON // BLKPOL
+                    CHRT18( N ) = CFIP // CSCC // BLKMON // FILPOL
+                    CHRT19( N ) = CFIP // CSCC // FILMON // BLKPOL
+                    CHRT20( N ) = CFIP // CSCC // FILMON // FILPOL
                 END DO
-
-                ISTA = INT( INVIFIP( J ) / 1000 ) * 1000
-
-                IF( ISTA /= PSTA ) THEN
-
-                    NSTA = NSTA + 1
-                    WRITE( CHRT01( NSTA ),'(I6.6,A)' ) ISTA, BLKSCC // BLKMON // BLKPOL
-                    WRITE( CHRT02( NSTA ),'(I6.6,A)' ) ISTA, BLKSCC // BLKMON // FILPOL
-                    WRITE( CHRT03( NSTA ),'(I6.6,A)' ) ISTA, BLKSCC // FILMON // BLKPOL
-                    WRITE( CHRT04( NSTA ),'(I6.6,A)' ) ISTA, BLKSCC // FILMON // FILPOL
-
-                    DO I = 1, NINVSCC
-                        NS = NS + 1
-                        WRITE( CHRT13(NS),'(I6.6,A)' ) ISTA, INVSCC(I) // BLKMON // BLKPOL
-                        WRITE( CHRT14(NS),'(I6.6,A)' ) ISTA, INVSCC(I) // BLKMON // FILPOL
-                        WRITE( CHRT15(NS),'(I6.6,A)' ) ISTA, INVSCC(I) // FILMON // BLKPOL
-                        WRITE( CHRT16(NS),'(I6.6,A)' ) ISTA, INVSCC(I) // FILMON // FILPOL
-                    END DO
-
-                    PSTA = ISTA
-
-                END IF
-
             END DO
 
 C.............  Allocate storage based on number of FIPs and SCCs in inventory
@@ -379,6 +380,14 @@ C.............  Parse line into fields
             POLNAM = ADJUSTL( SEGMENT( 3 ) )
             MON    = STR2INT( SEGMENT( 4 ) )
 
+            CBUF = ' '
+            CALL FLTRXREF( CFIP, CBUF, CSCC, POLNAM, CBUF,
+     &                     IDUM, IDUM, IDUM, PFLAG, SKIPREC )
+
+            NS = FINDC( CSCC, NINVSCC, INVSCC )
+            IF( CSCC == BLKSCC ) NS = 1
+            IF( NS < 1 ) CYCLE
+
             IF( POLNAM == ' ' ) THEN
                 CPOL = BLKPOL
             ELSE
@@ -392,69 +401,124 @@ C.............  Parse line into fields
                 CMON = FILMON
             END IF
             
-            CBUF = ' '
-            CALL FLTRXREF( CFIP, CBUF, CSCC, POLNAM, CBUF,
-     &                     IDUM, IDUM, IDUM, PFLAG, SKIPREC )
+            CFIPSCC = CFIP // CSCC // CMON // CPOL
 
-            IFIP = STR2INT( CFIP )
-            WRITE( CFIPSCC,'(I6.6,A)') IFIP, CSCC // CMON // CPOL
+          	FF = FINDC( CFIPSCC, NCHRT20, CHRT20 ) ! SCC=full, FIP=full, Mon=mon, Pol=pol
+           	IF( FF > 0 ) FF = 24
+            
+            IF( FF <= 0 ) THEN
+            	FF = FINDC( CFIPSCC, NCHRT19, CHRT19 ) ! SCC=full, FIP=full, Mon=mon, Pol=0
+            	IF( FF > 0 ) FF = 23
+            END IF
 
-            FD1 = 0
-            FD2 = 0
-            FD3 = 0
-            IF( CFIPSCC == CHRTD1 ) FD1 = 1      ! SCC=0,   FIP=0, Mon=0, Pol=pol
-            IF( CFIPSCC == CHRTD2 ) FD2 = 1      ! SCC=0,   FIP=state, Mon=mon, Pol=0
-            IF( CFIPSCC == CHRTD3 ) FD3 = 1      ! SCC=0,   FIP=state, Mon=mon, Pol=pol
-            F1 = FINDC( CFIPSCC, NCHRT01, CHRT01 )  ! SCC=0,   FIP=state, Mon=0, Pol=0
-            F2 = FINDC( CFIPSCC, NCHRT02, CHRT02 )  ! SCC=0,   FIP=state, Mon=0, Pol=pol
-            F3 = FINDC( CFIPSCC, NCHRT03, CHRT03 )  ! SCC=0,   FIP=state, Mon=mon, Pol=0
-            F4 = FINDC( CFIPSCC, NCHRT04, CHRT04 )  ! SCC=0,   FIP=state, Mon=mon, Pol=pol
-            F5 = FINDC( CFIPSCC, NCHRT05, CHRT05 )  ! SCC=0,   FIP=full, Mon=0, Pol=0
-            F6 = FINDC( CFIPSCC, NCHRT06, CHRT06 )  ! SCC=0,   FIP=full, Mon=0, Pol=pol
-            F7 = FINDC( CFIPSCC, NCHRT07, CHRT07 )  ! SCC=0,   FIP=full, Mon=mon, Pol=0
-            F8 = FINDC( CFIPSCC, NCHRT08, CHRT08 )  ! SCC=0,   FIP=full, Mon=mon, Pol=pol
-            F9 = FINDC( CFIPSCC, NCHRT09, CHRT09 )  ! SCC=full, FIP=0, Mon=0, Pol=0
-            F10 = FINDC( CFIPSCC, NCHRT10, CHRT10 ) ! SCC=full, FIP=0, Mon=0, Pol=pol
-            F11 = FINDC( CFIPSCC, NCHRT11, CHRT11 ) ! SCC=full, FIP=0, Mon=mon, Pol=0
-            F12 = FINDC( CFIPSCC, NCHRT12, CHRT12 ) ! SCC=full, FIP=0, Mon=mon, Pol=pol
-            F13 = FINDC( CFIPSCC, NCHRT13, CHRT13 ) ! SCC=full, FIP=state, Mon=0, Pol=0
-            F14 = FINDC( CFIPSCC, NCHRT14, CHRT14 ) ! SCC=full, FIP=state, Mon=0, Pol=pol
-            F15 = FINDC( CFIPSCC, NCHRT15, CHRT15 ) ! SCC=full, FIP=state, Mon=mon, Pol=0
-            F16 = FINDC( CFIPSCC, NCHRT16, CHRT16 ) ! SCC=full, FIP=state, Mon=mon, Pol=pol
-            F17 = FINDC( CFIPSCC, NCHRT17, CHRT17 ) ! SCC=full, FIP=full, Mon=0, Pol=0
-            F18 = FINDC( CFIPSCC, NCHRT18, CHRT18 ) ! SCC=full, FIP=full, Mon=0, Pol=pol
-            F19 = FINDC( CFIPSCC, NCHRT19, CHRT19 ) ! SCC=full, FIP=full, Mon=mon, Pol=0
-            F20 = FINDC( CFIPSCC, NCHRT20, CHRT20 ) ! SCC=full, FIP=full, Mon=mon, Pol=pol
+            IF( FF <= 0 ) THEN
+	            FF = FINDC( CFIPSCC, NCHRT18, CHRT18 ) ! SCC=full, FIP=full, Mon=0, Pol=pol
+            	IF( FF > 0 ) FF = 22
+            END IF
 
-            FF = -99
-            IF( F20 > 0 ) FF = 20
-            IF( F19 > 0 ) FF = 19
-            IF( F18 > 0 ) FF = 18
-            IF( F17 > 0 ) FF = 17
-            IF( F16 > 0 ) FF = 16
-            IF( F15 > 0 ) FF = 15
-            IF( F14 > 0 ) FF = 14
-            IF( F13 > 0 ) FF = 13
-            IF( F12 > 0 ) FF = 12
-            IF( F11 > 0 ) FF = 11
-            IF( F10 > 0 ) FF = 10
-            IF( F9 > 0 ) FF = 9
-            IF( F8 > 0 ) FF = 8
-            IF( F7 > 0 ) FF = 7
-            IF( F6 > 0 ) FF = 6
-            IF( F5 > 0 ) FF = 5
-            IF( F4 > 0 ) FF = 4
-            IF( F3 > 0 ) FF = 3
-            IF( F2 > 0 ) FF = 2
-            IF( F1 > 0 ) FF = 1
-            IF( FD3 > 0 ) FF = 0
-            IF( FD2 > 0 ) FF = -1
-            IF( FD1 > 0 ) FF = -2
-            IF( CFIPSCC == BLKFIPSCC ) FF = -3
+            IF( FF <= 0 ) THEN
+ 		        FF = FINDC( CFIPSCC, NCHRT17, CHRT17 ) ! SCC=full, FIP=full, Mon=0, Pol=0
+            	IF( FF > 0 ) FF = 21
+            END IF
+                        
+            IF( FF <= 0 ) THEN
+            	FF = FINDC( CFIPSCC, NCHRT16, CHRT16 ) ! SCC=full, FIP=state, Mon=mon, Pol=pol
+            	IF( FF > 0 ) FF = 20
+            END IF
 
-            IF( FF < -3 ) CYCLE     ! skip unmatched entries
 
-            WRITE( DUPTMP,'(A,I2.2)' ) CFIP//CSCC//POLNAM,MON
+            IF( FF <= 0 ) THEN
+            	FF = FINDC( CFIPSCC, NCHRT15, CHRT15 ) ! SCC=full, FIP=state, Mon=mon, Pol=0
+            	IF( FF > 0 ) FF = 19
+            END IF
+
+            IF( FF <= 0 ) THEN
+            	FF = FINDC( CFIPSCC, NCHRT14, CHRT14 ) ! SCC=full, FIP=state, Mon=0, Pol=pol
+            	IF( FF > 0 ) FF = 18
+            END IF
+            
+            IF( FF <= 0 ) THEN
+            	FF = FINDC( CFIPSCC, NCHRT13, CHRT13 ) ! SCC=full, FIP=state, Mon=0, Pol=0
+            	IF( FF > 0 ) FF = 17
+            END IF
+            
+            IF( FF <= 0 ) THEN
+            	FF = FINDC( CFIPSCC, NCHRT12, CHRT12 ) ! SCC=full, FIP=0, Mon=mon, Pol=pol
+            	IF( FF > 0 ) FF = 16
+            END IF
+            
+            IF( FF <= 0 ) THEN
+            	FF = FINDC( CFIPSCC, NCHRT11, CHRT11 ) ! SCC=full, FIP=0, Mon=mon, Pol=0
+            	IF( FF > 0 ) FF = 15
+            END IF
+            
+            IF( FF <= 0 ) THEN
+            	FF = FINDC( CFIPSCC, NCHRT10, CHRT10 ) ! SCC=full, FIP=0, Mon=0, Pol=pol
+            	IF( FF > 0 ) FF = 14
+            END IF
+            
+            IF( FF <= 0 ) THEN
+            	FF = FINDC( CFIPSCC, NCHRT09, CHRT09 )  ! SCC=full, FIP=0, Mon=0, Pol=0
+            	IF( FF > 0 ) FF = 13
+            END IF
+            
+            IF( FF <= 0 ) THEN
+            	FF = FINDC( CFIPSCC, NCHRT08, CHRT08 )  ! SCC=0,   FIP=full, Mon=mon, Pol=pol
+            	IF( FF > 0 ) FF = 12
+            END IF
+            
+            IF( FF <= 0 ) THEN
+            	FF = FINDC( CFIPSCC, NCHRT07, CHRT07 )  ! SCC=0,   FIP=full, Mon=mon, Pol=0
+            	IF( FF > 0 ) FF = 11
+            END IF
+            
+            IF( FF <= 0 ) THEN
+            	FF = FINDC( CFIPSCC, NCHRT06, CHRT06 )  ! SCC=0,   FIP=full, Mon=0, Pol=pol
+            	IF( FF > 0 ) FF = 10
+            END IF
+            
+            IF( FF <= 0 ) THEN
+            	FF = FINDC( CFIPSCC, NCHRT05, CHRT05 )  ! SCC=0,   FIP=full, Mon=0, Pol=0
+            	IF( FF > 0 ) FF = 9
+            END IF
+            
+            IF( FF <= 0 ) THEN
+            	FF = FINDC( CFIPSCC, NCHRT04, CHRT04 )  ! SCC=0,   FIP=state, Mon=mon, Pol=pol
+            	IF( FF > 0 ) FF = 8
+            END IF
+            
+            IF( FF <= 0 ) THEN
+            	FF = FINDC( CFIPSCC, NCHRT03, CHRT03 )  ! SCC=0,   FIP=state, Mon=mon, Pol=0
+            	IF( FF > 0 ) FF = 7
+            END IF
+            
+            IF( FF <= 0 ) THEN
+            	FF = FINDC( CFIPSCC, NCHRT02, CHRT02 )  ! SCC=0,   FIP=state, Mon=0, Pol=pol
+            	IF( FF > 0 ) FF = 6
+            END IF
+            
+            IF( FF <= 0 ) THEN
+            	FF = FINDC( CFIPSCC, NCHRT01, CHRT01 )  ! SCC=0,   FIP=state, Mon=0, Pol=0
+            	IF( FF > 0 ) FF = 5
+            END IF
+
+            IF( FF <= 0 ) THEN
+                IF( CFIPSCC == CHRTD3 ) FF = 4      ! SCC=0,   FIP=0, Mon=mon, Pol=pol
+            END IF
+
+            IF( FF <= 0 ) THEN
+                IF( CFIPSCC == CHRTD2 ) FF = 3      ! SCC=0,   FIP=0, Mon=mon, Pol=0
+            END IF
+
+            IF( FF <= 0 ) THEN
+            	IF( CFIPSCC == CHRTD1 ) FF = 2      ! SCC=0,   FIP=0, Mon=0, Pol=pol
+            END IF
+
+            IF( CFIPSCC == BLKFIPSCC ) FF = 1
+
+            IF( FF <= 0 ) CYCLE     ! skip unmatched entries
+
+            WRITE( DUPTMP,'(A,I2.2)' ) CFIP // CSCC // POLNAM, MON
 
             DO K = 1, NX
                 IF( DUPTMP == DUPCHECK( K ) ) THEN
@@ -480,7 +544,7 @@ C.............  No of CFPRO entries check
         NXREF = NX
 
 C.........  Processing a list of valid CFPRO entries
-        DO N = -3, 20     ! six hierarchy
+        DO N = 1, 24     ! six hierarchy
 
           DO I = 1, NXREF
         
@@ -492,7 +556,7 @@ C.........  Processing a list of valid CFPRO entries
        
 C.............  Parse line into fields
             CALL PARSLINE( CFIPSCCLIST( I ), 6, SEGMENT )
-            
+
             CFIP   = TRIM( SEGMENT( 1 ) )
             CSCC   = TRIM( SEGMENT( 2 ) )
             POLNAM = ADJUSTL( SEGMENT( 3 ) )
@@ -503,30 +567,25 @@ C.............  Parse line into fields
 
 C.............  Convert FIP to integer
             K = 0
-            IFIP = STR2INT( CFIP )
-            IF( IFIP == 0  ) THEN 
-
-C.....................  State-level is not applicable when REF_CFPRO_YN is set to Y
+C.............  State-level is not applicable when REF_CFPRO_YN is set to Y
+            IF( CFIP == BLKFIP  ) THEN 
                 IF( REFCFFLAG ) THEN
                     MESG = 'WARNING: FIPS code '//CFIP//' is not a reference county'
                     CALL M3MESG( MESG )
                 END IF
-
                 NFIPS = NINVIFIP
                 DO J = 1, NINVIFIP
                     NLFIPS( J ) = J
                 END DO
-
-            ELSE         ! FIPS is integer value 
-                L1 = FIND1( IFIP, NINVIFIP, INVIFIP )
-
+            ELSE         ! FIPS is not zero
+                L1 = FINDC( CFIP, NINVIFIP, INVCFIP )
                 IF( L1 > 0 ) THEN 
                     NFIPS = 1
                     NLFIPS(1) = L1
 
 C.....................  Propagate reference-county-specific control factor to inventory counties.
                     IF( REFCFFLAG ) THEN
-                        L2 = FIND1( IFIP, NREFC, MCREFIDX( :,1 ) )
+                        L2 = FINDC( CFIP, NREFC, MCREFIDX( :,1 ) )
                         IF( L2 < 1 ) THEN
                             MESG = 'WARNING: FIPS code '//CFIP//' is not a reference county'
                             CALL M3MESG( MESG )
@@ -535,8 +594,8 @@ C.....................  Propagate reference-county-specific control factor to in
 
 C.........................  find ref county and apply CF to ref-inventory counties
                         DO J = 1, NINVC
-                            IF( IFIP == MCREFSORT( J,2 ) ) THEN  ! found matched ref county
-                                L1 = FIND1( MCREFSORT( J,1 ), NINVIFIP, INVIFIP )
+                            IF( CFIP == MCREFSORT( J,2 ) ) THEN  ! found matched ref county
+                                L1 = FINDC( MCREFSORT( J,1 ), NINVIFIP, INVCFIP )
                                 IF( L1 > 0 ) THEN
                                     K = K + 1
                                     NLFIPS( K ) = L1
@@ -546,32 +605,27 @@ C.........................  find ref county and apply CF to ref-inventory counti
                         NFIPS = K
                     END IF
                 ELSE     ! FIPS is country/state  
-
 C.....................  State-level is not applicable when REF_CFPRO_YN is set to Y
-                    IF( MOD( IFIP,1000 ) /= 0 ) THEN
+                    IF( CFIP( 10:12 ) /= '000' ) THEN
                         MESG = 'WARNING: FIPS '//CFIP//' is not an inventory county'
                         CALL M3MESG( MESG )
                         CYCLE
                     END IF
 
-                    IFIP = IFIP/1000     ! Convert to State ID
                     DO J = 1, NINVIFIP 
-                        IF( IFIP == INVIFIP(J)/1000 ) THEN
+                        IF( CFIP(8:9) == INVCFIP(J)(8:9) ) THEN
                             K = K + 1
                             NLFIPS( K ) = J
                         END IF
                     END DO
                     NFIPS = K
-
                 END IF
-
             END IF
 
             IF( NFIPS == 0 ) CYCLE
 
 C.............  Find SCC in inventory list
-            K = 0 
-            IF( CSCC == ' ' .OR. CSCC == BLKSCC ) THEN 
+            IF( CSCC == BLKSCC ) THEN 
                 NSCCS = NINVSCC
                 DO J = 1, NINVSCC
                     NLSCCS(J) = J
@@ -588,7 +642,6 @@ C.............  Find SCC in inventory list
             END IF
 
 C.............  Check pollutant name and mode
-            K = 0
             IF( POLNAM == ' ' ) THEN
                 NPOLS  = NIPPA+NMSPC
                 DO J = 1, NPOLS

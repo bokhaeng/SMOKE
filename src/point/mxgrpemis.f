@@ -38,7 +38,7 @@ C***********************************************************************
 
 C...........   MODULES for public variables
 C...........   This module is the source inventory arrays
-        USE MODSOURC, ONLY: IFIP, TZONES
+        USE MODSOURC, ONLY: CIFIP, TZONES
 
 C.........  This module contains arrays for plume-in-grid and major sources
         USE MODELEV, ONLY: LELVRNK, LPNGRNK, GROUPID, NEVPEMV, MXEMIS,
@@ -50,6 +50,7 @@ C.........  This module contains the information about the source category
 
 C.........  This module contains the global variables for the 3-d grid
         USE MODGRID, ONLY: NCOLS, NROWS
+        USE MODGRDLIB
 
 C.........This module is required by the FileSetAPI
         USE MODFILESET
@@ -72,14 +73,13 @@ C...........   ARGUMENTS and their descriptions:
 C...........   EXTERNAL FUNCTIONS and their descriptions:
         CHARACTER(2) CRLF
         INTEGER      GETFLINE
-        LOGICAL      INGRID
         CHARACTER(14) MMDDYY
         LOGICAL      SETENVVAR
         INTEGER      PROMPTFFILE
         INTEGER      SECSDIFF
         INTEGER      WKDAY
 
-        EXTERNAL    CRLF, GETFLINE, INGRID, MMDDYY, SETENVVAR, 
+        EXTERNAL    CRLF, GETFLINE, MMDDYY, SETENVVAR, 
      &              PROMPTMFILE, SECSDIFF, WKDAY
 
 C...........   Local allocatable arrays
@@ -474,7 +474,7 @@ C.................  Write message for day of week and date
 
 C.................  Create array of which sources are affected by daylight 
 C                  savings
-                CALL GETDYSAV( NSRC, IFIP, LDAYSAV )
+                CALL GETDYSAV( NSRC, CIFIP, LDAYSAV )
 
 C.................  Set start and end hours of day for all sources
                 CALL SETSRCDY( NSRC, JDATE, TZONES, LDAYSAV, .FALSE., 

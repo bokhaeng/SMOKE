@@ -39,6 +39,9 @@
 
         INCLUDE 'EMPRVT3.EXT'   !  private emissions string widths parameters
 
+!.........  Turn on/off xref duplicate-checking in "lib/xreftbl.f":
+        LOGICAL, SAVE :: XDUPCHK = .TRUE.
+
 !.........  Per-source arrays with temporal profile indices to tables
         INTEGER, ALLOCATABLE :: MDEX ( :,: ) ! monthly       profile subscript
         INTEGER, ALLOCATABLE :: WDEX ( :,: ) ! weeky         profile subscript
@@ -383,7 +386,6 @@
 
 !.........  Unsorted, unprocessed cross-reference arrays
         INTEGER, ALLOCATABLE, PUBLIC:: INDXTA ( : ) !  sorting index
-        INTEGER, ALLOCATABLE, PUBLIC:: IFIPTA ( : ) !  co/st/cy FIPS codes
         INTEGER, ALLOCATABLE, PUBLIC:: ISPTA  ( : ) !  pollutant index to EINAM
         INTEGER, ALLOCATABLE, PUBLIC:: ISRGCDA( : ) !  spatial surrogate codes
         INTEGER, ALLOCATABLE, PUBLIC:: SRGIDAA( : ) !  assigned spatial surrogate codes
@@ -394,15 +396,16 @@
         INTEGER, ALLOCATABLE, PUBLIC:: IARPTA( :,: )!  tbl num, row, & count
         INTEGER, ALLOCATABLE, PUBLIC:: ISPDCDA( : ) !  speed profile codes
 
+        CHARACTER(FIPLEN3), ALLOCATABLE, PUBLIC:: CFIPTA( : ) ! FIPS codes
         CHARACTER(SPNLEN3), ALLOCATABLE, PUBLIC:: CSPRNA( : ) ! spec prof #
         CHARACTER(SCCLEN3), ALLOCATABLE, PUBLIC:: CSCCTA( : ) ! SCC
         CHARACTER(MACLEN3), ALLOCATABLE, PUBLIC:: CMACTA( : ) ! MACT
+        CHARACTER(SICLEN3), ALLOCATABLE, PUBLIC:: CISICA( : ) ! SIC
         CHARACTER(TAGLEN3), ALLOCATABLE, PUBLIC:: CTAGNA( : ) ! Tag labels
         CHARACTER(IOVLEN3+TAGLEN3+1),
      &                      ALLOCATABLE, PUBLIC:: CSPCTAGNA( : ) ! Species name - Tag labels
 
         CHARACTER(SSMLEN3+POLLEN3), ALLOCATABLE, PUBLIC:: CSRCTA(:)
-                                          ! source chars // SCC // MACT // pollutant
-                                          ! SCC can be SIC if SIC is given instead
+                                          ! source chars // SCC // MACT // SIC // pollutant
 
         END MODULE MODXREF

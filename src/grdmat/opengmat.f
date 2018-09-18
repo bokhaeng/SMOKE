@@ -1,6 +1,6 @@
 
         SUBROUTINE OPENGMAT( NMATX, NMATXU, UFLAG, INVPROG, INVVERS, 
-     &                       VFLAG, GNAME, UNAME, FDEV ) 
+     &                       VFLAG, NFLAG, GNAME, UNAME, FDEV ) 
 
 C***********************************************************************
 C  subroutine body starts at line 95
@@ -69,13 +69,14 @@ C...........   SUBROUTINE ARGUMENTS
         CHARACTER(*), INTENT (IN) :: INVPROG ! inventory program
         CHARACTER(*), INTENT (IN) :: INVVERS ! inventory program version
         LOGICAL     , INTENT (IN) :: VFLAG   ! true: using variable grid
+        LOGICAL     , INTENT (IN) :: NFLAG   ! true: using raw netcdf gridded inv file
         CHARACTER(*), INTENT(OUT) :: GNAME   ! gridding matrix logical name
         CHARACTER(*), INTENT(OUT) :: UNAME   ! ungridding matrix logical name
         INTEGER     , INTENT(OUT) :: FDEV    ! report file
 
 C...........   LOCAL PARAMETERS
         CHARACTER(50), PARAMETER :: 
-     &  CVSW = '$Name$' ! CVS release tag
+     &  CVSW = '$Name SMOKEv4.6_Sep2018$' ! CVS release tag
 
 C...........   Other local variables
 
@@ -142,11 +143,14 @@ C.........  Set up I/O API output file header for gridding matrix
         END IF
 
 C.........  Get name of gridding matrix
-
-        NAMBUF = PROMPTMFILE( 
+        IF( .NOT. NFLAG ) THEN
+            NAMBUF = PROMPTMFILE( 
      &           'Enter logical name for GRIDDING MATRIX output file',
      &           FSUNKN3, CRL // 'GMAT', PROGNAME )
-        GNAME = NAMBUF
+            GNAME = NAMBUF
+        ELSE
+            GNAME = CRL // 'GMAT'
+        END IF
 
 C.........  Set up I/O API output file header for ungridding matrix
 C.........  Leave everything the same as for the gridding matrix, but a couple

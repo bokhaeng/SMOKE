@@ -82,7 +82,7 @@ C...........   SUBROUTINE ARGUMENTS
 C...........   LOCAL PARAMETERS
         CHARACTER(16), PARAMETER :: FORMEVNM = 'SMKINVEN_FORMULA'
         CHARACTER(50), PARAMETER :: 
-     &  CVSW = '$Name$' ! CVS release tag
+     &  CVSW = '$Name SMOKEv4.6_Sep2018$' ! CVS release tag
 
 C...........   Other local variables
 
@@ -277,12 +277,6 @@ C               number of commas found in the string.
 C.........  Define source characteristic variables that are not strings
 
         J = 1
-        VNAMESET( J ) = 'IFIP'
-        VTYPESET( J ) = M3INT
-        VUNITSET( J ) = 'n/a'
-        VDESCSET( J ) = 'State and county FIPS code'
-        J = J + 1
-
         VNAMESET( J ) = 'TZONES'
         VTYPESET( J ) = M3INT
         VUNITSET( J ) = 'n/a'
@@ -307,13 +301,13 @@ C.........  Define source characteristic variables that are not strings
         
             IF( A2PFLAG ) THEN
                 VNAMESET( J ) = 'XLOCA'
-                VTYPESET( J ) = M3REAL
+                VTYPESET( J ) = M3DBLE
                 VUNITSET( J ) = 'degrees'
                 VDESCSET( J ) = 'longitude'
                 J = J + 1
                 
                 VNAMESET( J ) = 'YLOCA'
-                VTYPESET( J ) = M3REAL
+                VTYPESET( J ) = M3DBLE
                 VUNITSET( J ) = 'degrees'
                 VDESCSET( J ) = 'latitude'
                 J = J + 1
@@ -323,12 +317,6 @@ C.........  Define source characteristic variables that are not strings
             VTYPESET( J ) = M3INT
             VUNITSET( J ) = 'n/a'
             VDESCSET( J ) = 'Cell number'
-            J = J + 1
-
-            VNAMESET( J ) = 'ISIC'
-            VTYPESET( J ) = M3INT
-            VUNITSET( J ) = 'n/a'
-            VDESCSET( J ) = 'Source Industrial Code'
             J = J + 1
             
         CASE( 'MOBILE' )
@@ -346,45 +334,39 @@ C.........  Define source characteristic variables that are not strings
             J = J + 1
 
             VNAMESET( J ) = 'XLOC1'
-            VTYPESET( J ) = M3REAL
+            VTYPESET( J ) = M3DBLE
             VUNITSET( J ) = 'degrees'
             VDESCSET( J ) = 'Longitude at beginning of link'
             J = J + 1
 
             VNAMESET( J ) = 'YLOC1'
-            VTYPESET( J ) = M3REAL
+            VTYPESET( J ) = M3DBLE
             VUNITSET( J ) = 'degrees'
             VDESCSET( J ) = 'Latitude at beginning of link'
             J = J + 1
 
             VNAMESET( J ) = 'XLOC2'
-            VTYPESET( J ) = M3REAL
+            VTYPESET( J ) = M3DBLE
             VUNITSET( J ) = 'degrees'
             VDESCSET( J ) = 'Longitude at end of link'
             J = J + 1
 
             VNAMESET( J ) = 'YLOC2'
-            VTYPESET( J ) = M3REAL
+            VTYPESET( J ) = M3DBLE
             VUNITSET( J ) = 'degrees'
             VDESCSET( J ) = 'Latitude at end of link'
             J = J + 1
 
         CASE( 'POINT' )
 
-            VNAMESET( J ) = 'ISIC'
-            VTYPESET( J ) = M3INT
-            VUNITSET( J ) = 'n/a'
-            VDESCSET( J ) = 'Source Industrial Code'
-            J = J + 1
-
             VNAMESET( J ) = 'XLOCA'
-            VTYPESET( J ) = M3REAL
+            VTYPESET( J ) = M3DBLE
             VUNITSET( J ) = 'degrees'
             VDESCSET( J ) = 'longitude'
             J = J + 1
 
             VNAMESET( J ) = 'YLOCA'
-            VTYPESET( J ) = M3REAL
+            VTYPESET( J ) = M3DBLE
             VUNITSET( J ) = 'degrees'
             VDESCSET( J ) = 'latitude'
             J = J + 1
@@ -411,6 +393,30 @@ C.........  Define source characteristic variables that are not strings
             VTYPESET( J ) = M3REAL
             VUNITSET( J ) = 'm/s'
             VDESCSET( J ) = 'Stack exhaust velocity'
+            J = J + 1
+
+            VNAMESET( J ) = 'FUG_HEIGHT'
+            VTYPESET( J ) = M3REAL
+            VUNITSET( J ) = 'm'
+            VDESCSET( J ) = 'Fugitive emissions height'
+            J = J + 1
+
+            VNAMESET( J ) = 'FUG_WIDTH'
+            VTYPESET( J ) = M3REAL
+            VUNITSET( J ) = 'm'
+            VDESCSET( J ) = 'Fugitive emissions width (Y DIM)'
+            J = J + 1
+
+            VNAMESET( J ) = 'FUG_LENGTH'
+            VTYPESET( J ) = M3REAL
+            VUNITSET( J ) = 'm'
+            VDESCSET( J ) = 'Fugitive emissions length (X DIM)'
+            J = J + 1
+
+            VNAMESET( J ) = 'FUG_ANGLE'
+            VTYPESET( J ) = M3REAL
+            VUNITSET( J ) = 'm'
+            VDESCSET( J ) = 'Fugitive emissions angle'
             J = J + 1
 
         END SELECT

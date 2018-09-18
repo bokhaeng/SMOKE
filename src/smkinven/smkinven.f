@@ -57,11 +57,11 @@ C***************************************************************************
 
 C...........   MODULES for public variables
 C...........   This module is the inventory arrays
-        USE MODSOURC, ONLY: IFIP, ISIC, CSRCTYP, TZONES, CSCC, IDIU, IWEK,
+        USE MODSOURC, ONLY: CIFIP, CISIC, CSRCTYP, TZONES, CSCC, IDIU, IWEK,
      &                      CINTGR, CEXTORL
 C.........  This module contains the lists of unique inventory information
         USE MODLISTS, ONLY: MXIDAT, INVSTAT, INVDNAM, FIREFLAG, INVDCOD, 
-     &                      FF10FLAG, MEDSFLAG
+     &                      FF10FLAG, MEDSFLAG, NCDFLAG, APIFLAG, FIREFF10
 C.........  This module contains the information about the source category
         USE MODINFO, ONLY: CATEGORY, NIPOL, NIACT, NIPPA, EIIDX, INV_MON,
      &                     EINAM, AVIDX, ACTVTY, EANAM, NSRC
@@ -87,21 +87,22 @@ C...........   EXTERNAL FUNCTIONS and their descriptions:
         INTEGER       GETFLINE
         INTEGER       GETTZONE
         INTEGER       STR2INT
+        LOGICAL       USEEXPGEO
 
         EXTERNAL      CRLF, ENVINT, ENVYN, INDEX1, GETFLINE, GETTZONE, 
-     &                STR2INT
+     &                STR2INT, USEEXPGEO
 
 C...........  LOCAL PARAMETERS and their descriptions:
 
-        CHARACTER(50), PARAMETER :: CVSW = '$Name$' ! CVS release tag
+        CHARACTER(50), PARAMETER :: CVSW = '$Name SMOKEv4.6_Sep2018$' ! CVS release tag
 
 C.........  LOCAL VARIABLES and their descriptions:
 
 C.........  Day-specific and hour-specific variable indices
-        INTEGER         DEAIDX( MXVARS3 )
-        INTEGER         DSPIDX( MXSPDAT )
-        INTEGER         HEAIDX( MXVARS3 )
-        INTEGER         HSPIDX( MXSPDAT )
+        INTEGER     ::  DEAIDX( MXVARS3 ) = 0
+        INTEGER     ::  DSPIDX( MXSPDAT ) = 0
+        INTEGER     ::  HEAIDX( MXVARS3 ) = 0
+        INTEGER     ::  HSPIDX( MXSPDAT ) = 0
 
 C.........  Array that contains the names of the inventory variables needed for
 C           this program
@@ -112,7 +113,6 @@ C.........  File units and logical/physical names
         INTEGER    :: ADEV = 0  !  unit no. for REPINVEN file
         INTEGER    :: CDEV = 0  !  unit no. for SCCs description
         INTEGER    :: DDEV = 0  !  unit no. for day-specific input file 
-        INTEGER    :: EDEV = 0  !  unit no. for speeds file
         INTEGER    :: HDEV = 0  !  unit no. for hour-specific input file 
         INTEGER    :: IDEV = 0  !  unit no. for inventory file (various formats)
         INTEGER    :: LDEV = 0  !  unit no. for log file
@@ -123,7 +123,6 @@ C.........  File units and logical/physical names
         INTEGER    :: UDEV = 0  !  unit no. for non-HAP inclusions/exclusions file
         INTEGER    :: SDEV = 0  !  unit no. for ASCII output inventory file
         INTEGER    :: TDEV = 0  !  unit no. for MEDS daily/hourly inventory file
-        INTEGER    :: XDEV = 0  !  unit no. for VMT mix file
         INTEGER    :: YDEV = 0  !  unit no. for area-to-point factors file
         INTEGER    :: ZDEV = 0  !  unit no. for time zone file
 
@@ -143,7 +142,6 @@ C...........   Other local variables
         INTEGER      :: DSDATE = 0 ! day-specific data start date
         INTEGER      :: DSTIME = 0 ! day-specific data start time
 
-        INTEGER         FIP        ! Temporary FIPS code
         INTEGER      :: HNSTEP = 0 ! day-specific data time step number
         INTEGER      :: HSDATE = 0 ! day-specific data start date
         INTEGER      :: HSTIME = 0 ! day-specific data start time
@@ -153,7 +151,6 @@ C...........   Other local variables
         INTEGER      :: MXSRCDY= 0 ! max no. day-specific sources
         INTEGER      :: MXSRCHR= 0 ! max no. hour-specific sources
         INTEGER      :: NDAT = 0   ! tmp no. actual pols & activities
-        INTEGER      :: NFIPLIN = 0! number of lines in ZDEV
         INTEGER      :: NINVARR = 0! no. inventory variables to read
         INTEGER      :: NRAWBP = 0 ! number of sources with pollutants
         INTEGER      :: NRAWSRCS= 0! number of unique sources
@@ -162,15 +159,12 @@ C...........   Other local variables
         INTEGER      :: NVARHR = 0 ! no. hour-specific variables
         INTEGER      :: NVSPHR = 0 ! no. hour-specific special variables
         INTEGER         OUTSTEP    ! output time step HHMMSS for day/hour data
-        INTEGER         PFIP       ! previous FIPS code
         INTEGER         TZONE      ! output time zone for day- & hour-specific
 
         LOGICAL         A2PFLAG          ! true: using area-to-point processing
         LOGICAL      :: CFLAG = .FALSE.  ! true: CEM processing
-        LOGICAL      :: GFLAG = .FALSE.  ! true: gridded NetCDF inputs used
         LOGICAL         IFLAG            ! true: average inventory inputs used
         LOGICAL         NONPOINT         ! true: importing nonpoint inventory
-        LOGICAL      :: TFLAG = .FALSE.  ! TRUE if temporal x-ref output
         LOGICAL         ORLFLG           ! true: ORL format inventory
         LOGICAL         STKFLG           ! true: check stack parameters
 
@@ -178,6 +172,8 @@ C...........   Other local variables
         CHARACTER(256)        MESG        !  message buffer
         CHARACTER(IOVLEN3) :: GRDNM = ' ' !  I/O API input file grid name
         CHARACTER(PHYLEN3) :: VARPATH = './' ! path for pol/act files
+        CHARACTER(FIPLEN3)    CFIP        ! temporary FIPS code
+        CHARACTER(FIPLEN3)    PCFIP       ! previous FIPS code
 
         CHARACTER(16) :: PROGNAME = 'SMKINVEN'   !  program name
 
@@ -197,39 +193,36 @@ C.........  Output time zone
         TZONE = ENVINT( 'OUTZONE', 'Output time zone', 0, IOS )
 
 C.........  Get names of input files
-        CALL OPENINVIN( CATEGORY, IDEV, DDEV, HDEV, RDEV, SDEV, XDEV,
-     &                  EDEV, PDEV, ZDEV, CDEV, ODEV, UDEV, YDEV,
+        CALL OPENINVIN( CATEGORY, IDEV, DDEV, HDEV, RDEV, SDEV,
+     &                  PDEV, ZDEV, CDEV, ODEV, UDEV, YDEV,
      &                  ENAME, INAME, DNAME, HNAME )
 
 C.........  Set controller flags depending on unit numbers
-        IFLAG = ( IDEV .NE. 0 )
-        GFLAG = ( .NOT. IFLAG .AND. .NOT. DAYINVFLAG .AND. .NOT.
-     &            HRLINVFLAG )
+        IFLAG   = ( IDEV .NE. 0 )
         A2PFLAG = ( YDEV .NE. 0 )
 
-C.........  Set gridded input file name, if available
-        IF( GFLAG ) GNAME = ENAME
+C.........  Set IOAPI or NetCDF gridded input file name, if available
+        IF( APIFLAG .OR. NCDFLAG ) GNAME = ENAME
 
         MESG = 'Setting up to read inventory data...'
         CALL M3MSG2( MESG )
 
 C.........  Read country, state, and county file for time zones
-        IF( ZDEV .GT. 0 ) CALL RDSTCY( ZDEV, 1, I )   !  "I" used as a dummy
+        IF( USEEXPGEO() ) THEN
+            CALL RDGEOCODES( 1, I )
+        ELSE IF( ZDEV .GT. 0 ) THEN
+            CALL RDSTCY( ZDEV, 1, I )   !  "I" used as a dummy
+        END IF
 
 C.........  Read, sort, and store inventory data table file
         CALL RDCODNAM( PDEV )
 
-C.........  Read mobile-source files
-        IF( CATEGORY .EQ. 'MOBILE' ) THEN          
-
-C.............  Fill tables for translating mobile road classes & vehicle types
-C.............  The tables are passed through MODMOBIL
-C            CALL RDMVINFO( RDEV )
-
-        END IF
-
 C.........  Read/store informatino for MEDS inv processing
         IF( MEDSFLAG ) CALL RDMEDSINFO  ! read GAI_LOOKUP_TABLE (col/row to lat/lon) for MEDS format inv
+
+C.........  Define the month of inventory processing
+        MESG = 'Define the processing inventory month'
+        INV_MON = ENVINT( 'SMKINVEN_MONTH', MESG, 0, IOS )
 
 C.........  Process for ASCII average day or annual inventory
         IF( IFLAG ) THEN
@@ -238,22 +231,18 @@ C.............  Read the source information from the raw inventory files,
 C               store in unsorted order, and determine source IDs
 C.............  The arrays that are populated by this subroutine call
 C               are contained in the module MODSOURC
-            MESG = 'Define inventory month to process'
-            INV_MON = ENVINT( 'SMKINVEN_MONTH', MESG, 0, IOS )
-
             IF( INV_MON == 0 ) THEN
                 MESG = 'Processing Annual inventory....'
                 CALL M3MSG2( MESG )
             ELSE
-                MESG = 'Processsing ' // MON_NAME( INV_MON ) // 
+                MESG = 'Processing ' // TRIM( MON_NAME( INV_MON ) ) // 
      &                 ' inventory'
                 CALL M3MSG2( MESG )
             END IF
 
             CALL M3MSG2( 'Reading inventory sources...' )
 
-            CALL RDINVSRCS( IDEV, XDEV, EDEV, INAME,
-     &                      NRAWBP, NRAWSRCS, TFLAG, ORLFLG )
+            CALL RDINVSRCS( IDEV, INAME, NRAWBP, NRAWSRCS, ORLFLG )
 
 C.............  Process source information and store in sorted order
             CALL M3MSG2( 'Processing inventory sources...' )
@@ -341,7 +330,7 @@ C                module MODSOURC
             IF( CATEGORY .EQ. 'POINT' ) THEN
                 MESG = 'Check stack parameter values'
                 STKFLG = ENVYN( 'CHECK_STACKS_YN', MESG, .TRUE., IOS )
-                IF( FIREFLAG ) STKFLG = .FALSE.    ! skip check stack para when wildfire
+                IF( FIREFLAG .OR. FIREFF10 ) STKFLG = .FALSE.    ! skip check stack para when wildfire
                 IF( STKFLG ) CALL FIXSTK( RDEV, NSRC )
             END IF
 
@@ -351,13 +340,13 @@ C               this is not perfectly accurate for all counties.
             ALLOCATE( TZONES( NSRC ), STAT=IOS )
             CALL CHECKMEM( IOS, 'TZONES', PROGNAME )
 
-            PFIP = 0
+            PCFIP = ''
             DO S = 1, NSRC
-                FIP   = IFIP( S )
+                CFIP = CIFIP( S )
  
-                IF( FIP /= PFIP ) THEN
-                    TZONES( S ) = GETTZONE( FIP )
-                    PFIP = FIP
+                IF( CFIP /= PCFIP ) THEN
+                    TZONES( S ) = GETTZONE( CFIP )
+                    PCFIP = CFIP
                 ELSE
                     TZONES( S ) = TZONES( S - 1 )
                 END IF
@@ -370,21 +359,17 @@ C               lengthy inventory import does not need to be redone...
 C.............  Write out SCC file
             CALL WRCHRSCC( CSCC )
 
-C.............  Write out temporal x-ref file. (TFLAG is true for EMS-95 format
-C               for point sources only)
-C.............  NOTE - Monthly not currently supported
-            IF( TFLAG ) CALL WRPTREF( NSRC, IDIU, IWEK, IWEK ) 
-
         END IF  ! For ASCII annual/ave-day inputs
 
 C.........  Input gridded I/O API inventory data
-        IF( GFLAG ) THEN
+        IF( APIFLAG .OR. NCDFLAG ) THEN
 
-            CALL RDGRDAPI( GNAME, GRDNM ) 
+            IF( APIFLAG ) CALL RDGRDAPI( GNAME, GRDNM ) 
+            IF( NCDFLAG ) CALL RDGRDNCF( INAME, ENAME ) 
 
 C.............  initialize arrays for later 
-            ALLOCATE( ISIC  ( NSRC ), STAT=IOS )
-            CALL CHECKMEM( IOS, 'ISIC', PROGNAME )
+            ALLOCATE( CISIC ( NSRC ), STAT=IOS )
+            CALL CHECKMEM( IOS, 'CISIC', PROGNAME )
             ALLOCATE( CSRCTYP( NSRC ), STAT=IOS )
             CALL CHECKMEM( IOS, 'CSRCTYP', PROGNAME )
             ALLOCATE( CINTGR( NSRC ), STAT=IOS )
@@ -392,15 +377,17 @@ C.............  initialize arrays for later
             ALLOCATE( CEXTORL( NSRC ), STAT=IOS )
             CALL CHECKMEM( IOS, 'CEXTORL', PROGNAME )
 
-            ISIC = 0            ! array
+            CISIC   = ' '       ! array
             CSRCTYP = ' '       ! array
             CINTGR  = ' '       ! array
             CEXTORL = ' '       ! array
 
+            IFLAG = .TRUE.
+
         END IF  ! For gridded I/O API NetCDF inventory
 
 C.........  Output SMOKE inventory files
-        IF( IFLAG .OR. GFLAG ) THEN
+        IF( IFLAG ) THEN
 
 C.............  Generate message to use just before writing out inventory files
 C.............  Open output I/O API and ASCII files 
@@ -443,16 +430,17 @@ C               if this is a fire inventory, scan inventory data names
 C               to see if HFLUX is present. If so, FIREFLAG = .true.
             IF ( INDEX1( 'HFLUX',NIPPA,EANAM ) .GT. 0 ) FIREFLAG= .TRUE.
 
-            NINVARR = 4
-            IVARNAMS( 1 ) = 'IFIP'    ! In case CEM input
+            NINVARR = 5
+            IVARNAMS( 1 ) = 'CIFIP'   ! In case CEM input
             IVARNAMS( 2 ) = 'CSOURC'  ! In case non-CEM input
             IVARNAMS( 3 ) = 'CSCC'    ! In case CEM input (for reporting)
             IVARNAMS( 4 ) = 'CPDESC'  ! In case CEM input
+            IVARNAMS( 5 ) = 'CINTGR'  ! for VOC + HAPs integration
+
             IF ( .NOT. FIREFLAG ) THEN
                 NINVARR = 7
-                IVARNAMS( 5 ) = 'CORIS'   ! In case CEM input
-                IVARNAMS( 6 ) = 'CBLRID'  ! In case CEM input
-                IVARNAMS( 7 ) = 'CINTGR'  ! for VOC + HAPs integration
+                IVARNAMS( 6 ) = 'CORIS'   ! In case CEM input
+                IVARNAMS( 7 ) = 'CBLRID'  ! In case CEM input
             END IF
 
             CALL RDINVCHR( CATEGORY, ENAME, SDEV, NSRC, NINVARR,
@@ -462,26 +450,23 @@ C               to see if HFLUX is present. If so, FIREFLAG = .true.
 
 C.........  Read in daily or hourly MEDS emission values and output to a SMOKE inter output file
         IF( MEDSFLAG ) THEN
-
+C.............  Read and output day-specific data
             IF( DAYINVFLAG ) THEN
                 TYPNAM = 'day'
                 TDEV   = DDEV
+                CALL GENMEDSOUT( TDEV, TNAME, TZONE, TYPNAM ) 
+
             ELSE IF( HRLINVFLAG ) THEN
                 TYPNAM = 'hour'
                 TDEV   = HDEV
-            ELSE
-                GOTO 999
+                CALL GENMEDSOUT( TDEV, TNAME, TZONE, TYPNAM ) 
+
             END IF
-
-C.............  Read and output day-specific data
-            CALL GENMEDSOUT( TDEV, TNAME, TZONE, TYPNAM ) 
-
-            GOTO 999
 
         END IF
 
 C.........  Read in daily emission values and output to a SMOKE file
-        IF( DAYINVFLAG ) THEN
+        IF( DAYINVFLAG .AND. .NOT. MEDSFLAG ) THEN
 
             INSTEP  = 240000
             OUTSTEP = 10000
@@ -501,7 +486,7 @@ C.............  Read and output day-specific data
         END IF
 
 C.........  Read in hourly emission values and output to a SMOKE file
-        IF( HRLINVFLAG ) THEN
+        IF( HRLINVFLAG .AND. .NOT. MEDSFLAG ) THEN
 
             INSTEP  = 10000
             OUTSTEP = 10000
@@ -522,7 +507,7 @@ C.............  Read and output hour-specific data
 
 C.............  Write inventory report file
 C        CALL M3MSG2( 'Writing inventory report file...' )
-C        CALL WREPINVEN( ADEV, CDEV )
+C        IF( .NOT. MEDSFLAG ) CALL WREPINVEN( ADEV, CDEV )
 
 C.........  End program successfully
 999     MESG = ' '

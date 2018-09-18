@@ -81,8 +81,9 @@ C.........  Input file format constants
         INTEGER, PARAMETER  :: ORLDYFRFMT = 10 ! ORL FIREEMIS format
         INTEGER, PARAMETER  :: FF10FMT    = 11 ! FF10 format
         INTEGER, PARAMETER  :: MEDSFMT    = 12 ! MEDS format
+        INTEGER, PARAMETER  :: NCDFMT     = 13 ! Gridded NetCDF format
 
-        CHARACTER(12), PARAMETER :: FMTNAMES( 0:12 ) = 
+        CHARACTER(12), PARAMETER :: FMTNAMES( 0:13 ) = 
      &                        ( / 'list        ', 
      &                            'EMS-95      ', 
      &                            'EPS         ', 
@@ -95,7 +96,8 @@ C.........  Input file format constants
      &                            'ORL FIRE    ',
      &                            'ORL FIREEMIS',
      &                            'FF10        ',
-     &                            'MEDS        ' / )
+     &                            'MEDS        ',
+     &                            'GRID        ' / )
 
 C.........  Indicator for inventory header fields
         CHARACTER, PARAMETER :: CINVHDR = '#'
@@ -105,9 +107,6 @@ C.........  Separator for speciation "variables" (stored in description field)
 
 C.........  Separator for emission type names
         CHARACTER(2), PARAMETER :: ETJOIN = '__'
-
-C.........  Separator for SIC imbedded in SCC field
-        CHARACTER(5), PARAMETER :: SICNOTE = '--SIC'
 
 C.........  Units for speciation matrice
         CHARACTER(16), PARAMETER :: SMASUNIT = 'g/ton'
@@ -123,26 +122,27 @@ C.........  Environment variables
         CHARACTER(16), PARAMETER :: ERRSET  = 'SMK_MAXERROR    '
 
 C.........  Time zones
-        INTEGER    , PARAMETER :: MXTZONE = 31
+        INTEGER    , PARAMETER :: MXTZONE = 33
         INTEGER    , PARAMETER :: TZONNUM( MXTZONE ) =
-     &                        ( / 0, 3, 4, 4, 5,
-     &                            5, 6, 6, 7, 7,
-     &                            8, 9, 10, 10, 11,
-     &                           11, 12, 13, 14, 15,
-     &                           16, 17, 18, 19, 20,
-     &                           21, 22, 23, 1,  2,
-     &                           3  / )
+     &                        ( /     0,     3,     4,     4,     5,
+     &                                5,     6,     6,     7,     7,
+     &                                8,     9,    10,    10,    11,
+     &                               11,    12,    -1,    -2,    -3,
+     &                               -4,    -5,    -6,    -7,    -8,
+     &                               -9,   -10,   -11,   -12,   -13,
+     &                              -14,     1,     2 / )
+
         CHARACTER(3), PARAMETER :: TZONNAM( MXTZONE ) =
-     &                        ( / 'GMT', 'ADT', 'AST', 'EDT', 'EST',
+     &                        ( / 'GMT', 'ART', 'AST', 'EDT', 'EST',
      &                            'CDT', 'CST', 'MDT', 'MST', 'PDT',
-     &                            'PST', 'YST', 'HST', 'CAT', 'NT ',
-     &                            'WST', 'IDE', 'SBT', 'GUT', 'JST',
-     &                            'CCT', 'SST', 'BDT', 'IOT', 'GST',
-     &                            'MSK', 'EET', 'CET', 'CVT', 'TST',
-     &                            'BST' / )
+     &                            'PST', 'AKT', 'HST', 'CAT', 'NT ',
+     &                            'SST', 'BIT', 'CET', 'EET', 'MSK',
+     &                            'GST', 'PKT', 'BST', 'THA', 'HKT',
+     &                            'KST', 'AET', 'ADT', 'FJT', 'NZT', 
+     &                            'LNT', 'EGT', 'FNT' / )
 
 C.........  Packet information
-        INTEGER,       PARAMETER :: NPACKET = 8
+        INTEGER,       PARAMETER :: NPACKET = 7
         CHARACTER(20), PARAMETER :: PKTLIST( NPACKET ) = 
      &                          (  / 'CTG                 ',
      &                               'CONTROL             ',
@@ -150,13 +150,7 @@ C.........  Packet information
      &                               'ADD                 ',
      &                               'REACTIVITY          ',
      &                               'PROJECTION          ',
-     &                               'EMS_CONTROL         ',
      &                               'MACT                '  / )
-
-        LOGICAL, PARAMETER :: PKTFIXED( NPACKET ) =
-     &                     (  / .FALSE., .FALSE., .FALSE., 
-     &                          .FALSE., .FALSE., .FALSE.,
-     &                          .TRUE.,  .FALSE. / )
 
 C.........  Control and projection matrix codes (in order of precedence)
         INTEGER, PARAMETER :: CTYPPROJ = 1   ! for projection matrix
@@ -212,11 +206,11 @@ C.........  Variable dimensioning components, independent
 
         PARAMETER   ( CPRTLEN3 = 3
      &              , NARPPOL3 = 6
-     &              , NARVAR3  = 6 
-     &              , NMBVAR3  = 10
+     &              , NARVAR3  = 4 
+     &              , NMBVAR3  = 9
      &              , NMBPPOL3 = 2   
      &              , NPTPPOL3 = 7
-     &              , NPTVAR3  = 11
+     &              , NPTVAR3  =13
      &              )
 
 C.........  Maximum settings...

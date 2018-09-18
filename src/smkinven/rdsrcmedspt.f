@@ -76,8 +76,8 @@ C...........   Other local variables
         INTEGER, SAVE:: NPOL    !  number of pollutants in file
         INTEGER         ROW, COL  ! tmp row and col
 
-        LOGICAL, SAVE:: FIRSTIME = .TRUE. ! true: first time routine is called
- 
+        CHARACTER( 3 )    :: STA = '006'   ! State code for CA (006)
+        CHARACTER( 3 )       ARBN, CNTY
         CHARACTER(300)       MESG    !  message buffer
         CHARACTER(CHRLEN3)   GAI     !  GAI lookup code
 
@@ -86,61 +86,38 @@ C...........   Other local variables
 C***********************************************************************
 C   begin body of subroutine RDSRCMEDSPT
 
-C.........  Scan for header lines and check to ensure all are set 
-C           properly
-        CALL GETHDR( MXPOLFIL, .FALSE., .TRUE., .TRUE., 
-     &               LINE, ICC, INY, NPOL, IOS )
-
-C.........  Interpret error status
-        IF( IOS == 4 ) THEN
-            WRITE( MESG,94010 ) 
-     &             'Maximum allowed data variables ' //
-     &             '(MXPOLFIL=', MXPOLFIL, CRLF() // BLANK10 //
-     &             ') exceeded in input file'
-            CALL M3EXIT( PROGNAME, 0, 0, MESG, 2 )
-
-        ELSE IF( IOS > 0 ) THEN
-            EFLAG = .TRUE.
-
-        END IF
-
-C.........  If a header line was encountered, set flag and return
-        IF( IOS >= 0 ) THEN
-            HDRFLAG = .TRUE.
-            RETURN
-        ELSE
-            HDRFLAG = .FALSE.
-            NPOLPERLN = NPOL
-        END IF
+C.........  Fixed no of pollutants in MEDS
+        HDRFLAG = .FALSE.
+        NPOLPERLN = 6       ! fixed no of poll (CO,NOx,SOx,TOG,PM,NH3) in MEDS
 
 C.........  Use the file format definition to parse the line into
 C           the various data fields
         GAI = ADJUSTL( LINE( 71:73 ) )  ! GAI lookup code
 
         IF( .NOT. ALLOCATED( COABDST ) ) THEN
+           EFLAG = .TRUE.
            MESG='ERROR: MUST set IMPORT_MEDS_YN to Y to process'
      &        //' pregridded MEDS-formatted inventory'
-           CALL M3EXIT( PROGNAME, 0, 0, MESG, 2 )
+           CALL M3MESG( MESG )
         END IF
 
         I = INDEX1( GAI, NMEDGAI, COABDST( :,1 ) )
         IF( I < 1 ) THEN
-            MESG = 'ERROR: Can not find GAI code ' // GAI //
-     &             ' from GAI_LOOKUP_TABLE input file'
-           CALL M3EXIT( PROGNAME, 0, 0, MESG, 2 )
-        END IF
+            ARBN = ADJUSTR( LINE( 68:70 ) )
+            CALL PADZERO( ARBN )
+            WRITE( CNTY, '(I3.3)' ) STR2INT( LINE( 57:58 ) )
+            CFIP = ARBN // STA // CNTY // '000'
+        ELSE
+            CFIP = TRIM( COABDST( I,2 ) )    ! FIPS code
+        ENDIF
 
-        CFIP = COABDST( I,2 )( 4:9 )     ! FIPS code
         FCID = ADJUSTL( LINE( 43:51 ) )  ! platn/facility ID
         SKID = ADJUSTL( LINE( 52:56 ) )  ! stack ID
         PTID = ADJUSTL( LINE( 37:39 ) )  ! Column ID
         SGID = ADJUSTL( LINE( 40:42 ) )  ! Row ID
-        TSCC = ADJUSTL( LINE(  9:22 ) )  ! EIC code
+        TSCC = ADJUSTR( LINE(  9:22 ) )  ! EIC code
+        CALL PADZERO( TSCC )
 
-C.........  Make sure routine knows it's been called already
-        FIRSTIME = .FALSE.
-
-C.........  Return from subroutine 
         RETURN
 
 C******************  FORMAT  STATEMENTS   ******************************

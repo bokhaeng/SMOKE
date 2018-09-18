@@ -86,7 +86,7 @@ C...........   SUBROUTINE ARGUMENTS
 
 C...........   LOCAL PARAMETERS
         CHARACTER(50), PARAMETER :: 
-     &  CVSW = '$Name$'  ! CVS revision tag
+     &  CVSW = '$Name SMOKEv4.6_Sep2018$'  ! CVS revision tag
 
 C...........   Other local variables
 
@@ -102,8 +102,8 @@ C...........   Other local variables
         CHARACTER(300)  MESG        ! message buffer 
 
         CHARACTER(NAMLEN3)  NAMBUF       ! [A|M|P]TMP file name buffer
-        CHARACTER(200)  NAMBUFT          ! [A|M|P]TMPNAME file name buffer
-        CHARACTER(200)  NAMBUFS          ! [A|M|P]TSUPNAME file name buffer
+        CHARACTER(512)  NAMBUFT          ! [A|M|P]TMPNAME file name buffer
+        CHARACTER(512)  NAMBUFS          ! [A|M|P]TSUPNAME file name buffer
         CHARACTER(IODLEN3)  IFDESC2, IFDESC3 ! fields 2 & 3 from PNTS FDESC
 
         CHARACTER(16) :: PROGNAME = 'OPENTMP' ! program name

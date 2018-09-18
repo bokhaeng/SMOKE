@@ -35,11 +35,11 @@ C***************************************************************************
 
 C...........   MODULES for public variables
 C...........   This module is the inventory arrays
-        USE MODSOURC, ONLY: IFIP, ISIC, INVYR, XLOCA, YLOCA,
+        USE MODSOURC, ONLY: CIFIP, INVYR, XLOCA, YLOCA,
      &                      CORIS, STKHT, STKDM, STKTK, STKVE,
      &                      CSCC, CSOURC, CPDESC, CLINK, CBLRID,
      &                      CERPTYP, CMACT, CNAICS, CSRCTYP, CNEIUID,
-     &                      CEXTORL
+     &                      CEXTORL, CISIC
 
 C.........  This module contains the arrays for state and county summaries
         USE MODSTCY, ONLY: NCOUNTRY, CTRYCOD, CTRYNAM
@@ -65,10 +65,11 @@ C...........   INCLUDES:
 C...........   EXTERNAL FUNCTIONS:
         CHARACTER*2     CRLF
         LOGICAL         ENVYN
-        INTEGER         FIND1
+        INTEGER         FINDC
         INTEGER         INDEX1
+        INTEGER         STR2INT
 
-        EXTERNAL        CRLF, ENVYN, FIND1, INDEX1
+        EXTERNAL        CRLF, ENVYN, FINDC, INDEX1, STR2INT
 
 C...........   SUBROUTINE ARGUMENTS
         INTEGER      , INTENT (IN) :: RDEV           ! emissions unit no.
@@ -81,7 +82,7 @@ C...........   SUBROUTINE ARGUMENTS
 
 C...........   ORL output variables (names same as ORL format description)
 
-        INTEGER         FIP, SIC
+        INTEGER         FIP
         INTEGER         CPRI     ! primary control device code
         INTEGER         CSEC     ! secondary control device code
         INTEGER         UTMZ     ! tmp default UTM zone
@@ -97,6 +98,7 @@ C...........   ORL output variables (names same as ORL format description)
         CHARACTER(PLTLEN3) PLANTID  
         CHARACTER(DSCLEN3) PLNTDESC
         CHARACTER(SCCLEN3) SCC
+        CHARACTER(SICLEN3) SIC
         CHARACTER(CHRLEN3) SEGMENT
         CHARACTER(STPLEN3) SRCTYPE
         CHARACTER(CHRLEN3) STACKID
@@ -125,7 +127,6 @@ C...........   Other local variables
         LOGICAL ORLCOLS( 7 )
         DATA    ORLCOLS / 6*.TRUE., .FALSE. /
 
-        CHARACTER(4)   CSIC           !  tmp character SIC code
         CHARACTER(4)   CYEAR          !  character 4-digit year
         CHARACTER(128) CHARS( 7 )     !  source fields for output
         CHARACTER(256) POLBUF         !  pollutant list buffer
@@ -186,11 +187,10 @@ C.............  Write area-source characteristics to output file
                 S = SRCID( C )
 
 C.................  Store others in temporary variables
-                COID = IFIP( S ) / 100000
-                FIP  = IFIP( S ) - COID * 100000
-                SIC  = ISIC ( S )
+                COID = STR2INT( CIFIP( S ) ) / 100000
+                FIP  = STR2INT( CIFIP( S ) ) - COID * 100000
+                SIC  = CISIC( S )
                 YEAR = INVYR( S )
-
                 SCC  = CSCC ( S )
  
                 IF( ASSOCIATED( CMACT ) ) THEN
@@ -268,8 +268,7 @@ C.................  Write ORL nonroad format
      &                  AVD_EMIS, CEFF, REFF, RPEN, SRCTYPE, TRIM(CEXT)
 C.................  Write ORL nonpoint format
                 ELSE
-                   WRITE( CSIC,'(I4.4)' ) SIC
-                   WRITE( RDEV,93210 ) FIP, SCC, TRIM(CSIC), TRIM(MACT), 
+                   WRITE( RDEV,93210 ) FIP, SCC, TRIM(SIC), TRIM(MACT), 
      &                  TRIM(SRCTYPE), TRIM(NAICS), TRIM(CAS), ANN_EMIS,
      &                  AVD_EMIS, CEFF, REFF, RPEN, TRIM(CEXT)
                 END IF
@@ -300,9 +299,9 @@ C.............  Write mobile-source characteristics to output file
                 S = SRCID( C )
 
 C.................  Store others in temporary variables
-                COID = IFIP( S ) / 100000
-                FIP  = IFIP( S ) - COID * 100000
-                SIC  = ISIC ( S )
+                COID = STR2INT( CIFIP( S ) ) / 100000
+                FIP  = STR2INT( CIFIP( S ) ) - COID * 100000
+                SIC  = CISIC( S )
                 YEAR = INVYR( S )
 
                 SCC  = CSCC ( S )
@@ -400,9 +399,9 @@ C.................  Truncate character string variables
                 SCC      = CHARS( 6 )
 
 C.................  Store others in temporary variables
-                COID   = IFIP( S ) / 100000
-                FIP    = IFIP( S ) - COID * 100000
-                SIC    = ISIC ( S )                
+                COID   = STR2INT( CIFIP( S ) ) / 100000
+                FIP    = STR2INT( CIFIP( S ) ) - COID * 100000
+                SIC    = CISIC( S )(SICLEN3-3:SICLEN3)
                 YEAR   = INVYR( S )
                 CORS   = CORIS( S )
                 CBLR   = CBLRID( S )
@@ -520,7 +519,7 @@ C...........   Formatted file I/O formats............ 93xxx
      &          ',', A, A )   ! onroad
 
 93600   FORMAT( I5.5, 8( ',"',A, '"'), 4( ',', F10.2), ',', F10.4,
-     &          ',', I4, 2( ',"',A, '"'),',', A1, 
+     &          ',', A4, 2( ',"',A, '"'),',', A1, 
      &          2( ',', F10.5), ',', I3, ',"', A, '"', 2( ',', E13.6 ),
      &          2( ',', F6.2 ), ',', I2, ',', I2, 3(',"',A,'"'), A )  ! point
 
@@ -543,6 +542,7 @@ C.............  Subprogram arguments
 
 C.............  Subprogram local variables
             INTEGER     K
+            CHARACTER( FIPLEN3 ) CTRY
 
 C-------------------------------------------------------------------------
 
@@ -551,8 +551,10 @@ C-------------------------------------------------------------------------
             IF( COID .NE. LCOID .OR. YEAR .NE. LYEAR ) THEN
 
                 WRITE( CYEAR, '(I4)' ) YEAR
+                WRITE( CTRY,  '(I6)' ) COID
+                CALL PADZERO( CTRY ) 
 
-                K = FIND1( COID*100000, NCOUNTRY, CTRYCOD )
+                K = FINDC( CTRY, NCOUNTRY, CTRYCOD )
 
                 IF( K .GT. 0 ) THEN
 

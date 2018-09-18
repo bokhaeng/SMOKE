@@ -48,7 +48,7 @@ C...........   This module is the source inventory arrays
         USE MODSOURC, ONLY: CSOURC
 
 C.........  This module contains arrays for plume-in-grid and major sources
-        USE MODELEV, ONLY: NHRSRC, GRPCOL, GRPROW, GRPXL, GRPYL, 
+        USE MODELEV, ONLY: NHRSRC, GRPCOL, GRPROW, GRPXX, GRPYY, 
      &                     GRPHT, GRPDM, GRPTK, GRPVE,
      &                     NGROUP, GRPGID, ELEVSRC, LPING,
      &                      ELEVSIDX, GROUPID, INDXH, ELEVEMIS
@@ -167,7 +167,7 @@ C.........  Other local variables
         LOGICAL       :: EFLAG    = .FALSE.  ! true: error occurred
         LOGICAL       :: FIRSTIME = .TRUE.   ! true: first time routine called
 
-        CHARACTER(16)      OUTFMT       ! output format for elevated ASCII
+        CHARACTER(16),SAVE :: OUTFMT       ! output format for elevated ASCII
         CHARACTER(100)     EFMT         ! output emissions foamat
         CHARACTER(200)     BUFFER       ! source chars buffer
         CHARACTER(300)     MESG         ! message buffer
@@ -265,8 +265,8 @@ C               passed to it.
             J = PVSTIME
             CALL SAFE_READ3_I( PVNAME, 'COL' , 1, I, J, GRPCOL )
             CALL SAFE_READ3_I( PVNAME, 'ROW' , 1, I, J, GRPROW )
-            CALL SAFE_READ3( PVNAME, 'XLOCA' , 1, I, J, GRPXL )
-            CALL SAFE_READ3( PVNAME, 'YLOCA' , 1, I, J, GRPYL )
+            CALL SAFE_READ3( PVNAME, 'XLOCA' , 1, I, J, GRPXX )
+            CALL SAFE_READ3( PVNAME, 'YLOCA' , 1, I, J, GRPYY )
             CALL SAFE_READ3( PVNAME, 'STKHT' , 1, I, J, GRPHT )
             CALL SAFE_READ3( PVNAME, 'STKDM' , 1, I, J, GRPDM )
             CALL SAFE_READ3( PVNAME, 'STKTK' , 1, I, J, GRPTK )
@@ -335,8 +335,8 @@ c note: FMTCSRC doesn't work here because MODINFO is not populated
 
                 COL  = GRPCOL( N )
                 ROW  = GRPROW( N )
-                XLOC = GRPXL ( N )
-                YLOC = GRPYL ( N )
+                XLOC = GRPXX ( N )
+                YLOC = GRPYY ( N )
 
 C.................  Skip records that are outside the grid
                 IF ( COL .EQ. 0 .OR. ROW .EQ. 0 ) THEN
@@ -653,7 +653,6 @@ C                       the grid is lat-lon or not
 
 C.........  Write out date/time-specific data...
 C.........  Data previously merged in MRGELEV
-
         IF( JTIME .NE. PTIME .AND. OUTFMT .EQ. 'UAM' ) THEN
 
 C.............  Time Interval packet:

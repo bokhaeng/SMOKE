@@ -39,15 +39,15 @@ C***************************************************************************
 
 C...........   MODULES for public variables
 C...........   This module is the inventory arrays
-        USE MODSOURC, ONLY: INDEXA, IFIPA, TPFLGA, INVYRA, CSCCA,
+        USE MODSOURC, ONLY: INDEXA, TPFLGA, INVYRA, CSCCA,
      &                      IPOSCOD, CSOURCA, POLVLA, IRCLASA, IVTYPEA,
      &                      CVTYPEA, CLINKA, XLOC1A, YLOC1A, XLOC2A,
-     &                      YLOC2A, ISICA, IDIUA, IWEKA, XLOCAA, YLOCAA,
+     &                      YLOC2A, IDIUA, IWEKA, XLOCAA, YLOCAA,
      &                      STKHTA, STKDMA, STKTKA, STKVEA, CORISA,
-     &                      CBLRIDA, CPDESCA, IFIP, TPFLAG, INVYR,
+     &                      CBLRIDA, CPDESCA, CIFIP, TPFLAG, INVYR,
      &                      TZONES, NPCNT, CSCC, CSOURC, POLVAL, XLOCA,
      &                      YLOCA, CELLID, IRCLAS, IVTYPE, CVTYPE,
-     &                      XLOC1, YLOC1, XLOC2, YLOC2, ISIC, IDIU,
+     &                      XLOC1, YLOC1, XLOC2, YLOC2, CISIC, IDIU,
      &                      STKHT, STKDM, STKTK, STKVE, CORIS, CBLRID,
      &                      CPDESC, SRCIDA, CLINK, IWEK
 
@@ -88,11 +88,6 @@ C.............  Allocate variables irrespective of PFLAG
             END IF
 
 C.............  Allocate for any source category
-            IF( UFLAG .AND. .NOT. ASSOCIATED( IFIPA ) ) THEN
-                ALLOCATE( IFIPA( NDIM1 ), STAT=IOS )
-                CALL CHECKMEM( IOS, 'IFIPA', PROGNAME )
-            END IF
-
             IF( UFLAG .AND. .NOT. ASSOCIATED( TPFLGA ) ) THEN
                 ALLOCATE( TPFLGA( NDIM1 ), STAT=IOS )
                 CALL CHECKMEM( IOS, 'TPFLGA', PROGNAME )
@@ -131,7 +126,6 @@ C.............  Allocate for any source category
 
 C.............  Deallocate for any source category
             IF( .NOT. AFLAG .AND. .NOT. PFLAG ) THEN
-                IF( ASSOCIATED( IFIPA )   ) DEALLOCATE( IFIPA )
                 IF( ASSOCIATED( TPFLGA )  ) DEALLOCATE( TPFLGA )
                 IF( ASSOCIATED( INVYRA )  ) DEALLOCATE( INVYRA )
                 IF( ASSOCIATED( CSCCA )   ) DEALLOCATE( CSCCA )
@@ -196,11 +190,6 @@ C.............  Allocate specifically based on source category
 
             CASE( 'POINT' )
  
-                IF( UFLAG .AND. .NOT. ALLOCATED( ISICA ) ) THEN
-                    ALLOCATE( ISICA( NDIM1 ), STAT=IOS )
-                    CALL CHECKMEM( IOS, 'ISICA', PROGNAME )
-                END IF
- 
                 IF( UFLAG .AND. .NOT. ALLOCATED( IDIUA ) ) THEN
                     ALLOCATE( IDIUA( NDIM1 ), STAT=IOS )
                     CALL CHECKMEM( IOS, 'IDIUA', PROGNAME )
@@ -257,8 +246,8 @@ C.............  Allocate specifically based on source category
                 END IF
 
                 IF( .NOT. PFLAG .AND. 
-     &              .NOT. AFLAG .AND. ALLOCATED( ISICA ) ) 
-     &              DEALLOCATE( ISICA, IDIUA, IWEKA, XLOCAA, YLOCAA,  
+     &              .NOT. AFLAG .AND. ALLOCATED( IDIUA ) ) 
+     &              DEALLOCATE( IDIUA, IWEKA, XLOCAA, YLOCAA,  
      &                          STKHTA, STKDMA, STKTKA, STKVEA,  
      &                          CORISA, CBLRIDA, CPDESCA )
 
@@ -274,9 +263,9 @@ C.............  Allocate specifically based on source category
 C.........  Sorted ...
         CASE( 'SORTED' )
 
-            IF( UFLAG .AND. .NOT. ASSOCIATED( IFIP ) ) THEN
-                ALLOCATE( IFIP( NDIM1 ), STAT=IOS )
-                CALL CHECKMEM( IOS, 'IFIP', PROGNAME )
+            IF( UFLAG .AND. .NOT. ASSOCIATED( CIFIP ) ) THEN
+                ALLOCATE( CIFIP( NDIM1 ), STAT=IOS )
+                CALL CHECKMEM( IOS, 'CIFIP', PROGNAME )
             END IF
 
             IF( UFLAG .AND. .NOT. ASSOCIATED( TPFLAG ) ) THEN
@@ -400,9 +389,9 @@ C               may be needed for reading day- and hour-specific data
 
             CASE( 'POINT' )
  
-                IF( UFLAG .AND. .NOT. ASSOCIATED( ISIC ) ) THEN
-                    ALLOCATE( ISIC( NDIM1 ), STAT=IOS )
-                    CALL CHECKMEM( IOS, 'ISIC', PROGNAME )
+                IF( UFLAG .AND. .NOT. ASSOCIATED( CISIC ) ) THEN
+                    ALLOCATE( CISIC( NDIM1 ), STAT=IOS )
+                    CALL CHECKMEM( IOS, 'CISIC', PROGNAME )
                 END IF
 
                 IF( UFLAG .AND. .NOT. ALLOCATED( IDIU ) ) THEN
@@ -463,10 +452,8 @@ C               may be needed for reading day- and hour-specific data
 C.................  Do not deallocate plant description in case needed for
 C                   point sources report.
                 IF( .NOT. PFLAG .AND. 
-     &              .NOT. AFLAG .AND. ASSOCIATED( ISIC ) ) 
-!     &              DEALLOCATE( ISIC, IDIU, IWEK, XLOCA, YLOCA, 
-!     &                          STKHT, STKDM, STKTK, STKVE )
-     &              DEALLOCATE( ISIC, XLOCA, YLOCA, 
+     &              .NOT. AFLAG .AND. ASSOCIATED( CISIC ) ) 
+     &              DEALLOCATE( CISIC, XLOCA, YLOCA, 
      &                          STKHT, STKDM, STKTK, STKVE )
 
             END SELECT

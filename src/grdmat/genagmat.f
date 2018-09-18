@@ -38,7 +38,7 @@ C************************************************************************
 
 C...........   MODULES for public variables
 C...........   This module is the source inventory arrays
-        USE MODSOURC, ONLY: XLOCA, YLOCA, IFIP, CELLID, CSOURC
+        USE MODSOURC, ONLY: XLOCA, YLOCA, CIFIP, CELLID, CSOURC
 
 C...........   This module contains the gridding surrogates tables
         USE MODSURG, ONLY: NCELLS, FIPCELL, NSRGS, SRGLIST, NSRGFIPS,
@@ -57,6 +57,8 @@ C.........  This module contains the information about the source category
 C...........   This module contains the cross-reference tables
         USE MODXREF, ONLY: ASRGID
 
+        USE MODGRDLIB
+
         IMPLICIT NONE
 
 C...........   INCLUDES
@@ -69,7 +71,7 @@ C...........   INCLUDES
 C...........   EXTERNAL FUNCTIONS 
         CHARACTER(2)    CRLF
         INTEGER         FIND1
-        LOGICAL         INGRID
+        INTEGER         FINDC
         LOGICAL         DSCM3GRD
         INTEGER         GETFLINE
         LOGICAL         BLKORCMT
@@ -77,7 +79,7 @@ C...........   EXTERNAL FUNCTIONS
         INTEGER         STR2INT
         INTEGER         GETEFILE
 
-        EXTERNAL        CRLF, FIND1, INGRID, DSCM3GRD, BLKORCMT,
+        EXTERNAL        CRLF, FIND1, FINDC, DSCM3GRD, BLKORCMT,
      &                  SETENVVAR, STR2INT, GETFLINE, GETEFILE
 
 C...........   SUBROUTINE ARGUMENTS
@@ -99,7 +101,7 @@ C...........   SUBROUTINE ARGUMENTS
 C...........   Local allocatable arrays...
 C...........   LOCAL VARIABLES and their descriptions:
 C...........   Local parameters
-        INTEGER, PARAMETER :: MXSEG = 5           ! # of potential line segments
+        INTEGER, PARAMETER :: MXSEG = 10           ! # of potential line segments
 
 C...........   Other arrays
         CHARACTER(20) SEGMENT( MXSEG )             ! Segments of parsed lines
@@ -112,7 +114,7 @@ C...........   Scratch Gridding Matrix (subscripted by source-within-cell, cell)
 C...........   Temporary array for flagging sources that are outside the
 C              domain and for flagging sources with all zero surrogate fractions
         LOGICAL, ALLOCATABLE :: INDOMAIN( : ) ! true: src is in the domain
-        INTEGER, ALLOCATABLE :: FIPNOSRG( : ) ! cy/st/co codes w/o surrogates
+        CHARACTER(FIPLEN3), ALLOCATABLE :: FIPNOSRG( : ) ! cy/st/co codes w/o surrogates
 
 C...........   Temporary arrays for storing surrogate codes to use
         INTEGER, ALLOCATABLE :: SURGID1( : ) ! primary surrogate code
@@ -124,14 +126,12 @@ C...........   Other local variables
         INTEGER         GDEV      !  for surrogate coeff file
         INTEGER         COL       ! tmp column
         INTEGER         TCOL      ! tmp column
-        INTEGER         FIP       ! tmp country/state/county code
         INTEGER         ID1,ID2   ! tmp primary and secondary surg codes
         INTEGER         IOS       ! i/o status
         INTEGER         ISIDX     ! tmp surrogate ID code index
         INTEGER         ISDEF     ! default surrogate ID code index
         INTEGER         JMAX      ! counter for storing correct max dimensions
         INTEGER         L2        ! string length
-        INTEGER         LFIP      ! cy/st/co code from previous iteration
         INTEGER         NCEL      ! tmp number of cells 
         INTEGER         NNOSRG    ! no. of cy/st/co codes with no surrogates
         INTEGER         ROW       ! tmp row
@@ -142,6 +142,7 @@ C...........   Other local variables
         INTEGER      :: NLINES = 0! number of lines in input file
 
         REAL            FRAC    ! tmp surrogate fraction
+        REAL*8          XX, YY
 
         LOGICAL      :: EFLAG = .FALSE.    !  true: error detected
         LOGICAL      :: LFLAG = .FALSE.    !  true: location data available
@@ -150,7 +151,9 @@ C...........   Other local variables
         LOGICAL      :: CFLAG   = .FALSE.  ! true: called by sizgmat, false: called by gen[a|m]gmat
         LOGICAL      :: WFLAG   = .FALSE.  ! true: per iteration warning flag
 
-        CHARACTER(60)   LINE      ! Read buffer for a line
+        CHARACTER(FIPLEN3) CFIP   ! tmp country/state/county code
+        CHARACTER(FIPLEN3) LFIP   ! cy/st/co code from previous iteration
+        CHARACTER(200)  LINE      ! Read buffer for a line
         CHARACTER(16)   COORUNIT  !  coordinate system projection units
         CHARACTER(80)   GDESC     !  grid description
         CHARACTER(256)  MESG      !  message buffer 
@@ -183,7 +186,7 @@ C.........  Allocate memory for temporary gridding matrix and other
         CALL CHECKMEM( IOS, 'SURGID2', PROGNAME )
         SURGID1 = 0   ! array
         SURGID2 = 0   ! array
-        LFIP  = 0
+        LFIP  = ' '
         NNOSRG   = 0
         JMAX  = -1
 
@@ -191,16 +194,16 @@ C.........  Store the number and values of unfound cy/st/co codes
 C.........  Keep track of sources that are outside the domain
         DO I = 1, NSRC
 
-            FIP  = IFIP( I )
+            CFIP  = CIFIP( I )
 
-            F = FIND1( FIP, NSRGFIPS, SRGFIPS )
+            F = FINDC( CFIP, NSRGFIPS, SRGFIPS )
 
             IF ( F .LE. 0 ) THEN
 
-                IF( FIP .NE. LFIP ) THEN
+                IF( CFIP .NE. LFIP ) THEN
                     NNOSRG = NNOSRG + 1
-                    FIPNOSRG( NNOSRG ) = FIP
-                    LFIP = FIP
+                    FIPNOSRG( NNOSRG ) = CFIP
+                    LFIP = CFIP
                 END IF
 
                 INDOMAIN( I ) = .FALSE.
@@ -355,7 +358,7 @@ C.......       sixth case:   fallback default
 
             DO S = 1, NSRC
 
-                FIP  = IFIP  ( S )
+                CFIP = CIFIP ( S )
                 C    = CELLID( S )
                 CSRC = CSOURC( S )
                 SSC  = ASRGID( S )
@@ -370,9 +373,10 @@ C.................  Special case for source has an x/y location
                 IF( XYSET ) THEN
             
 C.....................  If source is in the domain, get cell number and store
-                    IF( INGRID( XLOCA( S ), YLOCA( S ), 
-     &                          NCOLS, NROWS, COL, ROW  ) ) THEN
-            
+                    XX = XLOCA( S )
+                    YY = YLOCA( S )
+                    IF( INGRID( XX, YY, NCOLS, NROWS, COL, ROW  ) ) THEN
+
                         C = ( ROW-1 ) * NCOLS + COL
                         J = NX( C )
             
@@ -420,7 +424,7 @@ C.................  For non-cell sources...
             
 C.................  Retrieve the indices to the surrogates tables
                 ISIDX = 1
-                F   = FIND1( FIP, NSRGFIPS, SRGFIPS )
+                F   = FINDC( CFIP, NSRGFIPS, SRGFIPS )
 
 C.................  Store the number and values of unfound cy/st/co codes
 C.................  Keep track of sources that are outside the domain

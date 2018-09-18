@@ -42,7 +42,7 @@ C.........  This module contains data structures and flags specific to Movesmrg
         USE MODMVSMRG, ONLY: SPDPRO
 
 C.........  This module contains the lists of unique source characteristics
-        USE MODLISTS, ONLY: NINVIFIP, INVIFIP, NINVSCC, INVSCC
+        USE MODLISTS, ONLY: NINVIFIP, INVCFIP, NINVSCC, INVSCC
 
 C.........  This module is for mobile-specific data
         USE MODMOBIL, ONLY: NSCCMAP, SCCMAPFLAG, SCCMAPLIST, EXCLSCCFLAG
@@ -60,14 +60,13 @@ C...........   EXTERNAL FUNCTIONS and their descriptions:
         LOGICAL       ENVYN
         INTEGER       INDEX1 
         INTEGER       GETFLINE
-        INTEGER       FIND1
         INTEGER       FINDC
         INTEGER       STR2INT
         INTEGER       PROMPTFFILE
         REAL          STR2REAL
         CHARACTER(2)  CRLF
         
-        EXTERNAL BLKORCMT, CHKINT, CHKREAL, FIND1, GETFLINE, 
+        EXTERNAL BLKORCMT, CHKINT, CHKREAL, FINDC, GETFLINE, 
      &           STR2INT, STR2REAL, CRLF, ENVYN, INDEX1, PROMPTFFILE
 
 C...........   SUBROUTINE ARGUMENTS
@@ -87,7 +86,6 @@ C...........   Other local variables
         INTEGER         SCCIDX      ! current SCC index
         INTEGER         NLINES      ! number of lines
         INTEGER         MDEV        ! open SCCXREF input file
-        INTEGER         CNTY        ! current FIPS code
         
         REAL            SPDVAL      ! hourly speed value
 
@@ -95,6 +93,7 @@ C...........   Other local variables
 
         CHARACTER(1060)    LINE     ! line buffer
         CHARACTER(300)     MESG     ! message buffer
+        CHARACTER(FIPLEN3) CFIP     ! current FIPS
         CHARACTER(SCCLEN3) SCC      ! current SCC
         CHARACTER(10)      KEYWORD  ! temperature keyword
 
@@ -149,6 +148,7 @@ C...........  Parse line into fields
 
 C...........  SCC mapping loop based on SCCXREF reference input file
           SCC = ADJUSTL( SEGMENT( 2 ) )
+          CALL PADZERO( SCC )
 
           KK = 0
           NSCC = 0
@@ -176,23 +176,15 @@ C.............  Find SCC in inventory list
                 CYCLE
             END IF
 
-C.............  Convert FIP to integer
-            IF( .NOT. CHKINT( SEGMENT( 1 ) ) ) THEN
-                EFLAG = .TRUE.
-                WRITE( MESG, 94010 ) 'ERROR: Bad FIPS code ' //
-     &            'at line', IREC, 'of hourly speed file.'
-                CALL M3MESG( MESG )
-                CYCLE
-            END IF
-
 C.............  Find county in inventory list
-            CNTY = STR2INT( SEGMENT( 1 ) )
-            FIPIDX = FIND1( CNTY, NINVIFIP, INVIFIP )
-            
+            CFIP = ADJUSTL( SEGMENT( 1 ) )
+            CALL PADZERO( CFIP )
+            FIPIDX = FINDC( CFIP, NINVIFIP, INVCFIP )
+
             IF( FIPIDX .LE. 0 ) THEN
                 WRITE( MESG, 94010 ) 'NOTE: Skipping line',
-     &            IREC, 'of hourly speed file because FIPS code',
-     &            CNTY, 'is not in the inventory.'
+     &            IREC, 'of hourly speed file because FIPS code '//
+     &            CFIP //' is not in the inventory.'
                 CALL M3MESG( MESG )
                 CYCLE
             END IF

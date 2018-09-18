@@ -1,6 +1,6 @@
 
         SUBROUTINE OPENINVIN( CATEGORY, ADEV, DDEV, HDEV, RDEV, SDEV, 
-     &                        XDEV, EDEV, PDEV, ZDEV, CDEV, ODEV, UDEV,
+     &                        PDEV, ZDEV, CDEV, ODEV, UDEV,
      &                        YDEV, ENAME, INNAME, IDNAME, IHNAME )
 
 C***********************************************************************
@@ -39,10 +39,10 @@ C Last updated: $Date$
 C
 C***************************************************************************
 C...........  This module contains the information about the source category
-        USE MODINFO, ONLY: NMAP, MAPNAM, MAPFIL, NCOMP, VAR_FORMULA
+        USE MODINFO, ONLY: NMAP, MAPNAM, MAPFIL, NCOMP, VAR_FORMULA, NETCDFUNIT
 
 C.........  This module contains the lists of unique inventory information
-        USE MODLISTS, ONLY: MEDSFLAG
+        USE MODLISTS, ONLY: MEDSFLAG, NCDFLAG, APIFLAG
 
 C............ This module contains the cross-reference tables
         USE MODXREF, ONLY: PROC_HAPS 
@@ -65,11 +65,14 @@ C...........   INCLUDES
 C...........   EXTERNAL FUNCTIONS and their descriptionsNRAWIN
         CHARACTER(2)       CRLF
         LOGICAL            ENVYN
+        INTEGER            ENVINT
         INTEGER            INDEX1
         INTEGER            PROMPTFFILE
         CHARACTER(NAMLEN3) PROMPTMFILE
+        LOGICAL            USEEXPGEO
 
-        EXTERNAL        CRLF, ENVYN, INDEX1, PROMPTFFILE, PROMPTMFILE
+        EXTERNAL        CRLF, ENVYN, INDEX1, PROMPTFFILE, PROMPTMFILE,
+     &                  USEEXPGEO, ENVINT
 
 C...........   SUBROUTINE ARGUMENTS
         CHARACTER(*), INTENT (IN) :: CATEGORY  ! source category
@@ -78,8 +81,6 @@ C...........   SUBROUTINE ARGUMENTS
         INTEGER     , INTENT(OUT) :: HDEV      ! unit no. for hr-specific file
         INTEGER     , INTENT(OUT) :: RDEV      ! unit no. for stack replacements
         INTEGER     , INTENT(OUT) :: SDEV      ! unit no. for optional inven in
-        INTEGER     , INTENT(OUT) :: XDEV      ! unit no. for vmt mix file
-        INTEGER     , INTENT(OUT) :: EDEV      ! unit no. for speeds file
         INTEGER     , INTENT(OUT) :: PDEV      ! unit no. for inven data table
         INTEGER     , INTENT(OUT) :: ZDEV      ! unit no. for time zones
         INTEGER     , INTENT(OUT) :: CDEV      ! unit no. for SCCs description
@@ -97,16 +98,13 @@ C...........   Other local variables
         INTEGER       IOS    ! i/o status
         INTEGER       I,J,L    ! counter and indices
         INTEGER       LCAT   ! length of CATEGORY string
-
+ 
         LOGICAL    :: CFLAG = .FALSE.  ! true: open area-to-point file
         LOGICAL    :: DFLAG = .FALSE.  ! true: open day-specific file
-        LOGICAL    :: GFLAG = .FALSE.  ! true: open gridded I/O API inventory
         LOGICAL    :: HFLAG = .FALSE.  ! true: open hour-specific file
         LOGICAL    :: IFLAG = .FALSE.  ! true: open annual/average inventory
         LOGICAL    :: NFLAG = .FALSE.  ! true: open non-HAP inclusions/exclusions
         LOGICAL    :: MFLAG = .FALSE.  ! true: treat all sources as treated
-        LOGICAL    :: SFLAG = .FALSE.  ! true: open speeds file
-        LOGICAL    :: XFLAG = .FALSE.  ! true: open VMT mix file
 
         CHARACTER(NAMLEN3) ANAME
         CHARACTER(NAMLEN3) NAMBUF      ! file name buffer
@@ -210,47 +208,45 @@ C               number of commas found in the string.
             CFLAG = ENVYN ( 'SMK_ARTOPNT_YN', MESG, .FALSE., IOS )
             
             MESG = 'Import gridded I/O API inventory data'
-            GFLAG = ENVYN ( 'IMPORT_GRDIOAPI_YN', MESG, .FALSE., IOS )
+            APIFLAG = ENVYN ( 'IMPORT_GRDIOAPI_YN', MESG, .FALSE., IOS )
+
+            MESG = 'Import gridded native NetCDF inventory data'
+            NCDFLAG = ENVYN ( 'IMPORT_GRDNETCDF_YN', MESG, .FALSE., IOS )
         END IF
 
-        IF ( CATEGORY .EQ. 'MOBILE' ) THEN
-            MESG = 'Import VMT mix data'
-            XFLAG = ENVYN ( 'IMPORT_VMTMIX_YN', MESG, .FALSE., IOS )
-
-            MESG = 'Import mobile speeds data'
-            SFLAG = ENVYN ( 'IMPORT_SPEEDS_YN', MESG, .FALSE., IOS )
+C.........  Define the unit and temporal resolution of raw NetCDF inventory files
+        IF( NCDFLAG ) THEN
+            NETCDFUNIT = ''
+            MESG = 'Define the unit of NetCDF gridded inventory pollutant'
+            CALL ENVSTR( 'NETCDF_POL_UNIT', MESG, ' ', NETCDFUNIT, IOS )
+            IF( NETCDFUNIT /= 'kg m-2 s-1' ) THEN
+                MESG = 'ERROR: Unit of pollutant MUST be "kg m-2 s-1"'
+                CALL M3EXIT( PROGNAME, 0, 0, MESG, 2 )
+            END IF
         END IF
-
-C.........  Make sure VMT mix and speeds will only be imported for mobile 
-C           sources
-        IF( CATEGORY .NE. 'MOBILE' ) THEN
-            XFLAG = .FALSE.
-            SFLAG = .FALSE.
 
 C.........  Make sure gridded point source file is not attempted
-        ELSE IF ( ( CATEGORY .EQ. 'POINT' .OR. 
-     &              CATEGORY .EQ. 'MOBILE'    ) .AND. 
-     &            GFLAG                               ) THEN
+        IF ( ( CATEGORY .EQ. 'POINT' .OR. 
+     &         CATEGORY .EQ. 'MOBILE'    ) .AND. 
+     &         ( APIFLAG    .OR.  NCDFLAG  )          ) THEN
             MESG = 'Cannot import gridded mobile or point source data.'
             CALL M3EXIT( PROGNAME, 0, 0, MESG, 2 )
-
         END IF
 
 C.........  When gridded data are imported, override other settings
-        IF( GFLAG ) THEN
+        IF( APIFLAG .OR. NCDFLAG ) THEN
             CFLAG = .FALSE.
             IFLAG = .FALSE.
             DFLAG = .FALSE.
             HFLAG = .FALSE.
-            XFLAG = .FALSE.
-            SFLAG = .FALSE.
         END IF
 
 C.........  Abort if no settings set to read data
         IF( .NOT. IFLAG .AND. 
      &      .NOT. DFLAG .AND.
      &      .NOT. HFLAG .AND.
-     &      .NOT. GFLAG      ) THEN
+     &      .NOT. APIFLAG .AND.
+     &      .NOT. NCDFLAG      ) THEN
 
             MESG = 'ERROR: Environment settings indicate no files ' //
      &             'are to be read'
@@ -278,13 +274,20 @@ C.........  Find name name of raw inventory file
 
         END IF
 
-C.........   Get NetCDF gridded inventory file (without SCCs)
-        IF( GFLAG ) THEN
+C.........   Get IOAPI gridded inventory file (without SCCs)
+        IF( APIFLAG ) THEN
 
             MESG = 'Enter logical name of the GRIDDED ' // 
      &             CATEGORY( 1:LCAT ) // ' INVENTORY ' // 'file'
 
             ENAME = PROMPTMFILE( MESG, FSREAD3, ENAME, PROGNAME )
+
+C.........   Get IOAPI gridded masking file (Country code and associated time zones)
+        ELSE IF( NCDFLAG ) THEN
+
+            MESG = 'Enter logical name of the GRID MASK input file '
+
+            ENAME = PROMPTMFILE( MESG, FSREAD3, 'GRIDMASK', PROGNAME )
 
 C.........  Get ASCII file name and open average input inventory file when 
 C           inventory is to be imported
@@ -327,20 +330,6 @@ C.........  Get file name and open daily input inventory file
             HDEV = PROMPTFFILE( MESG, .TRUE., .TRUE., IHNAME, PROGNAME )
         END IF
 
-C.........  Get VMT Mix file
-        IF( XFLAG ) THEN
-            MESG = 'Enter logical name for VMT MIX file'
-            XDEV = PROMPTFFILE( MESG, .TRUE., .TRUE., 'VMTMIX', 
-     &                          PROGNAME )
-       END IF
-
-C.........  Get speeds file
-        IF( SFLAG ) THEN
-            MESG = 'Enter logical name for MOBILE SPEEDS file'
-            EDEV = PROMPTFFILE( MESG, .TRUE., .TRUE., 'MSPEEDS', 
-     &                          PROGNAME )
-        END IF
-
         IF( IFLAG ) THEN
 
 C.............  Open category-specific inputs
@@ -359,7 +348,7 @@ C.................  Get file name for input replacement stack parameters file
 
 C.........  Get file name for country, state, and county file, with time 
 C           zones
-        IF( .NOT. GFLAG ) THEN
+        IF( .NOT. APIFLAG .AND. .NOT. USEEXPGEO() ) THEN
             ZDEV = PROMPTFFILE(
      &             'Enter logical name for COUNTRY, STATE, AND ' //
      &             'COUNTY file', .TRUE., .TRUE., 'COSTCY', PROGNAME )

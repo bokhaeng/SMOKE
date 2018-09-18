@@ -112,7 +112,10 @@ C.........  Allocate and initialize report arrays
         ALLRPT%BYCYNAM    = .FALSE.
         ALLRPT%BYDATE     = .FALSE.
         ALLRPT%BYELEV     = .FALSE.
+        ALLRPT%BYERPTYP   = .FALSE.
         ALLRPT%ELVSTKGRP  = .FALSE.
+        ALLRPT%BYGEO1     = .FALSE.
+        ALLRPT%BYGEO1NAM  = .FALSE.
         ALLRPT%BYHOUR     = .FALSE.
         ALLRPT%BYLAYER    = .FALSE.
         ALLRPT%BYPLANT    = .FALSE.
@@ -131,6 +134,7 @@ C.........  Allocate and initialize report arrays
         ALLRPT%BYSRC      = .FALSE.
         ALLRPT%BYSRG      = .FALSE.
         ALLRPT%BYSTACK    = .FALSE.
+        ALLRPT%BYSTKPARM  = .FALSE.
         ALLRPT%BYSTAT     = .FALSE.
         ALLRPT%BYSTNAM    = .FALSE.
         ALLRPT%BYMON      = .FALSE.
@@ -153,6 +157,7 @@ C.........  Allocate and initialize report arrays
         ALLRPT%SCCNAM     = .FALSE.
         ALLRPT%SRCNAM     = .FALSE.
         ALLRPT%STKPARM    = .FALSE.
+        ALLRPT%FUGPARM    = .FALSE.
         ALLRPT%USEASCELEV = .FALSE.
         ALLRPT%USECRMAT   = .FALSE.
         ALLRPT%USECUMAT   = .FALSE.

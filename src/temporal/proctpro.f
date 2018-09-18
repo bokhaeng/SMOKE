@@ -65,7 +65,7 @@ C.........  MODTMPRL contains the temporal profile tables
 
         USE MODINFO,  ONLY: CATEGORY, NIPPA, EANAM, NSRC
 
-        USE MODSOURC, ONLY: IFIP, CSCC, TZONES
+        USE MODSOURC, ONLY: CIFIP, CSCC, TZONES
 
         USE MODTMPRL, ONLY: NMON,   NWEK,   NHRL,   NDOM,
      &                      MONFAC, WEKFAC, HRLFAC, DOMFAC,
@@ -171,7 +171,6 @@ C.........   Local variables
 
         INTEGER, ALLOCATABLE :: COUNTIES( : )
         INTEGER, ALLOCATABLE ::  METFIPS( : )
-        INTEGER, ALLOCATABLE ::  METNDEX( : )
 
 C.........  Unsorted, sorted cross-reference data structures filtered
 C.........  from the input file
@@ -244,6 +243,7 @@ C.........  for better memory alignment
         CHARACTER(RWTLEN3)  CRWT        !  roadway type no.
         CHARACTER(VIDLEN3)  CVID        !  vehicle type ID no.
         CHARACTER(CHRLEN3)  CHARS( 5 )  !  temporary plant characteristics
+        CHARACTER(FIPLEN3)  PREVFIP     !  previous region code
 
         CHARACTER(16)       MTHNAME, WEKNAME, DOMNAME, DIUNAME
 
@@ -257,7 +257,7 @@ C......... NOTE:  FLTRXREF() does *not* filter by FIP!
 
         INTEGER             NFIPKEY
         INTEGER             INDXKEY( NIPPA+2*NSRC+1 )   !  sorting index for pol
-        INTEGER             FIPKEYU( 2*NSRC+1 )         !  unsorted, with duplicates
+        CHARACTER(FIPLEN3)  FIPKEYU( 2*NSRC+1 )         !  unsorted, with duplicates
         CHARACTER(FIPLEN3)  FIPKEYS( 2*NSRC+1 )         !  sorted, duplicate-free
 
         CHARACTER(256)      MESG
@@ -327,27 +327,25 @@ C.........  filtering the XREF file:
 
         N = 1
         INDXKEY( N ) = N        !  ultimate default
-        FIPKEYU( N ) = 0
+        FIPKEYU( N ) = REPEAT( '0' , FIPLEN3)
         DO I = 1, NSRC
             N = N + 1
             INDXKEY( N ) = N
-            FIPKEYU( N ) = 1000 * ( IFIP( I )/1000 )       !  state only (default value)
+            FIPKEYU( N ) = CIFIP( I )( 1:STALEN3 ) // '000' !  state only (default value)
             N = N + 1
             INDXKEY( N ) = N
-            FIPKEYU( N ) = IFIP( I )
+            FIPKEYU( N ) = CIFIP( I )
         END DO
 
-        CALL SORTI1( N, INDXKEY, FIPKEYU )
+        CALL SORTIC( N, INDXKEY, FIPKEYU )
 
-        L = IMISS3       !  now construct duplicate-free sorted list:
+        PREVFIP = ''       !  now construct duplicate-free sorted list:
         M = 0
         DO I = 1, N
             K = INDXKEY( I )
-            IF ( FIPKEYU( K ) .NE. L ) THEN
+            IF ( FIPKEYU( K ) .NE. PREVFIP ) THEN
                 M = M + 1
-                L = FIPKEYU( K )
-                WRITE( FIPKEYS( M ), '(I6)' ) FIPKEYU( K )
-                CALL PADZERO( FIPKEYS( M ) )
+                FIPKEYS( M ) = FIPKEYU( K )
             END IF
         END DO
         NFIPKEY = M
@@ -910,15 +908,16 @@ C.........  hour-of-day:  all these use TPROF_HOURLY:
         IF ( METCOUNT .GT. 0 ) THEN       !  met based
 
 C.............  Determine which hourly profiles to apply
-           MESG = 'Specifies the basis of hourly profiles: [YEAR|MONTH]'
-           CALL ENVSTR( 'HOURLY_TPROF_BASE', MESG, ' ',HOUR_TPROF, IOS )
-           CALL UPCASE( HOUR_TPROF )
+            MESG = 'Specifies the basis of hourly profiles: [YEAR|MONTH]'
+            CALL ENVSTR( 'HOURLY_TPROF_BASE', MESG, ' ',HOUR_TPROF, IOS )
+            CALL UPCASE( HOUR_TPROF )
 
-            IF( .NOT. ( HOUR_TPROF=='MONTH' .OR. HOUR_TPROF=='YEAR' ) ) THEN
+            IF( .NOT. ( HOUR_TPROF=='MONTH' .OR. HOUR_TPROF=='YEAR' .OR.
+     &                  HOUR_TPROF=='DAY' ) ) THEN
                 MESG = 'ERROR: MUST define the basis of hourly profiles '//
      &                 'for a correct hourly conversion.'
      &                 //CRLF()//BLANK10//':: Define HOURLY_TPROF_BASE to '//
-     &                 '[YEAR or MONTH]'
+     &                 '[YEAR, MONTH, or DAY]'
                 CALL M3EXIT( PNAME, 0, 0, MESG, 2 )
             END IF
 
@@ -951,7 +950,7 @@ C.............  Determine which hourly profiles to apply
 
                     DO S = 1, NSRC
 
-                        WRITE( CFIP, '(I6)' ) IFIP( S )
+                        CFIP = CIFIP( S )
                         TSCC = CSCC( S )
                         CALL PADZERO( CFIP )
                         CALL PADZERO( TSCC )
@@ -964,7 +963,7 @@ C.........................  use subscript into (unsorted) COUNTIES:
 
                         I = FINDC( CSRCALL, METCOUNT, METKEYS )         !  index in sorted XREF, or 0
                         IF ( I .GT. 0 )  THEN
-                            K = FIND1( IFIP( S ), NMETPROF, COUNTIES )  !  index into sorted list,   or 0
+                            K = FIND1( STR2INT( CFIP ), NMETPROF, COUNTIES )  !  index into sorted list,   or 0
                             METPROF( S,V ) = K                          !  index into unsorted list, or 0
                         END IF
 
@@ -1215,7 +1214,7 @@ C.............  Local variables:
                 CALL M3EXIT( PNAME, 0,0, MESG, 2 )
             END IF
 
-            TFAC( NFIELDS,0 ) = 1.0
+            TFAC( 1:NFIELDS,0 ) = 1.0
             IDSTR( 0 )        =  '0'
             NULLPROF          =   0
 
@@ -1307,7 +1306,7 @@ C.............  Open and count FNAME
             END IF
 
             IDSTR( 0 )        =  '0'
-            TFAC( NFIELDS,0 ) = 1.0
+            TFAC( 1:NFIELDS,0 ) = 1.0
 
 C.............  Read file:  CKEY and FACS
 
@@ -1450,7 +1449,8 @@ C.............  Local variables:
             INTEGER     IDINDX( IDCNT )
             INTEGER     NSORT, NLINES, NDATA, FDEV
             INTEGER     JDATE, JTIME, NRECS, MON, MDAY
-            LOGICAL     LEAPYEAR, EFLAG
+            LOGICAL     LEAPYEAR
+            LOGICAL  :: EFLAG = .FALSE.
 
             CHARACTER(  16) :: THISID, LASTID, AKEY, MISS
             CHARACTER(  16) :: IDSORT( IDCNT )

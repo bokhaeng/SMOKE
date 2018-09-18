@@ -40,9 +40,10 @@
 
         INCLUDE 'EMPRVT3.EXT'   !  emissions private parameters
 
+!.........  Flag to indicate whether source is intergrated or not 
+        LOGICAL, SAVE :: INTGRFLAG = .FALSE.
+
 !.........  Sorted list of point sources for SMOKE inventory file
-        INTEGER, POINTER,     PUBLIC:: IFIP  ( : )  !  source FIPS (county) ID
-        INTEGER, POINTER,     PUBLIC:: ISIC  ( : )  !  source SIC
         INTEGER, ALLOCATABLE, PUBLIC:: IRCLAS( : )  !  road class number
         INTEGER, ALLOCATABLE, PUBLIC:: IVTYPE( : )  !  vehicle type code
         INTEGER, ALLOCATABLE, PUBLIC:: CELLID( : )  !  Cell ID
@@ -57,12 +58,12 @@
         INTEGER, ALLOCATABLE, PUBLIC:: IWEK  ( : )  !  Wk prof code per source
         INTEGER, ALLOCATABLE, PUBLIC:: IMON  ( : )  !  Mn prof code per source
 
-        REAL   , ALLOCATABLE, PUBLIC:: XLOCA ( : )  !  lon X-location 
-        REAL   , ALLOCATABLE, PUBLIC:: YLOCA ( : )  !  lat Y-location 
-        REAL   , ALLOCATABLE, PUBLIC:: XLOC1 ( : )  !  lon X-location link start 
-        REAL   , ALLOCATABLE, PUBLIC:: YLOC1 ( : )  !  lat Y-location link start
-        REAL   , ALLOCATABLE, PUBLIC:: XLOC2 ( : )  !  lon X-location link end 
-        REAL   , ALLOCATABLE, PUBLIC:: YLOC2 ( : )  !  lat Y-location link end
+        REAL*8 , ALLOCATABLE, PUBLIC:: XLOCA ( : )  !  lon X-location 
+        REAL*8 , ALLOCATABLE, PUBLIC:: YLOCA ( : )  !  lat Y-location 
+        REAL*8 , ALLOCATABLE, PUBLIC:: XLOC1 ( : )  !  lon X-location link start 
+        REAL*8 , ALLOCATABLE, PUBLIC:: YLOC1 ( : )  !  lat Y-location link start
+        REAL*8 , ALLOCATABLE, PUBLIC:: XLOC2 ( : )  !  lon X-location link end 
+        REAL*8 , ALLOCATABLE, PUBLIC:: YLOC2 ( : )  !  lat Y-location link end
         REAL   , ALLOCATABLE, PUBLIC:: SPEED ( : )  !  speed
         REAL   , ALLOCATABLE, PUBLIC:: STKHT ( : )  !  stack height   (m)
         REAL   , ALLOCATABLE, PUBLIC:: STKDM ( : )  !  stack diameter (m)
@@ -74,6 +75,7 @@
 
         REAL   , POINTER,     PUBLIC:: POLVAL( :,: )!  pol-spec values by pol
 
+        CHARACTER(FIPLEN3), POINTER,     PUBLIC:: CIFIP  ( : ) ! FIPS code
         CHARACTER(SCCLEN3), POINTER,     PUBLIC:: CSCC   ( : ) ! SCC
         CHARACTER(EXTLEN3), POINTER,     PUBLIC:: CEXTORL( : ) ! Additional Extended ORL vars
         CHARACTER(NEILEN3), ALLOCATABLE, PUBLIC:: CNEIUID( : ) ! NEI Unique ID
@@ -87,7 +89,10 @@
         CHARACTER(ERPLEN3), ALLOCATABLE, PUBLIC:: CERPTYP( : ) ! emission release point type
         CHARACTER(MACLEN3), POINTER,     PUBLIC:: CMACT  ( : ) ! MACT code
         CHARACTER(NAILEN3), POINTER,     PUBLIC:: CNAICS ( : ) ! NAICS code
-        CHARACTER(STPLEN3), POINTER,     PUBLIC:: CSRCTYP( : ) ! source type code
+        CHARACTER(STPLEN3), POINTER,     PUBLIC:: CSRCTYP( : ) ! source type code code
+        CHARACTER(SICLEN3), POINTER,     PUBLIC:: CISIC  ( : ) ! SIC
+        CHARACTER(SHPLEN3), POINTER,     PUBLIC:: CSHAPE ( : ) ! area-source SHAPE_ID
+       
         CHARACTER(SPNLEN3), ALLOCATABLE, PUBLIC:: SPPROF( :,: )! spec prof
         CHARACTER(TMPLEN3), ALLOCATABLE, PUBLIC:: CMON   ( : ) ! monthly profile code
         CHARACTER(TMPLEN3), ALLOCATABLE, PUBLIC:: CWEK   ( : ) ! weekly profile code
@@ -103,8 +108,6 @@
 
 !.........  Unsorted list of point sources for SMOKE inventory file
         INTEGER, POINTER,     PUBLIC:: INDEXA( : ) !  subscript table for SORTIC
-        INTEGER, POINTER,     PUBLIC:: IFIPA ( : ) !  raw state/county FIPS code
-        INTEGER, ALLOCATABLE, PUBLIC:: ISICA ( : ) !  raw SIC
         INTEGER, ALLOCATABLE, PUBLIC:: IRCLASA( : )!  road class number
         INTEGER, ALLOCATABLE, PUBLIC:: IVTYPEA( : )!  vehicle type code
         INTEGER, POINTER,     PUBLIC:: IPOSCODA(:) !  positn of pol in INVPCOD
@@ -116,12 +119,12 @@
         INTEGER, POINTER,     PUBLIC:: INRECA( : ) !  Input record per src x pol
         INTEGER, POINTER,     PUBLIC:: SRCIDA( : ) !  Source ID
 
-        REAL   , POINTER,     PUBLIC:: XLOCAA( : ) !  UTM X-location (m)
-        REAL   , POINTER,     PUBLIC:: YLOCAA( : ) !  UTM Y-location (m)
-        REAL   , ALLOCATABLE, PUBLIC:: XLOC1A( : ) !  lon X-location link start 
-        REAL   , ALLOCATABLE, PUBLIC:: YLOC1A( : ) !  lat Y-location link start
-        REAL   , ALLOCATABLE, PUBLIC:: XLOC2A( : ) !  lon X-location link end 
-        REAL   , ALLOCATABLE, PUBLIC:: YLOC2A( : ) !  lat Y-location link end
+        REAL*8 , POINTER,     PUBLIC:: XLOCAA( : ) !  UTM X-location (m)
+        REAL*8 , POINTER,     PUBLIC:: YLOCAA( : ) !  UTM Y-location (m)
+        REAL*8 , ALLOCATABLE, PUBLIC:: XLOC1A( : ) !  lon X-location link start 
+        REAL*8 , ALLOCATABLE, PUBLIC:: YLOC1A( : ) !  lat Y-location link start
+        REAL*8 , ALLOCATABLE, PUBLIC:: XLOC2A( : ) !  lon X-location link end 
+        REAL*8 , ALLOCATABLE, PUBLIC:: YLOC2A( : ) !  lat Y-location link end
         REAL   , ALLOCATABLE, PUBLIC:: SPEEDA( : ) !  speed
         REAL   , ALLOCATABLE, PUBLIC:: STKHTA( : ) !  stack height   (m)
         REAL   , ALLOCATABLE, PUBLIC:: STKDMA( : ) !  stack diameter (m)
@@ -129,6 +132,11 @@
         REAL   , ALLOCATABLE, PUBLIC:: STKVEA( : ) !  exhaust velocity    (m/s)
         REAL   , POINTER,     PUBLIC:: POLVLA( :,: )! emis-spec values. See BLDENAMS.
         REAL   , ALLOCATABLE, PUBLIC:: VMTA  ( : ) !  vehicle miles traveled
+
+        REAL   , ALLOCATABLE, PUBLIC:: FUGHGT( : ) !  fugitive emissions height
+        REAL   , ALLOCATABLE, PUBLIC:: FUGWID( : ) !  fugitive emissions width (YDIM)
+        REAL   , ALLOCATABLE, PUBLIC:: FUGLEN( : ) !  fugitive emissions length (XDIM)
+        REAL   , ALLOCATABLE, PUBLIC:: FUGANG( : ) !  fugitive emissions angle
 
         CHARACTER(SCCLEN3), POINTER,     PUBLIC:: CSCCA  ( : ) ! SCC
         CHARACTER(ORSLEN3), ALLOCATABLE, PUBLIC:: CORISA ( : ) ! DOE plant ID
@@ -143,7 +151,7 @@
         INTEGER,              PUBLIC:: NMEDGAI
 
         CHARACTER(CHRLEN3), ALLOCATABLE, PUBLIC:: CMEDGRD( :,: )   ! MEDS grid row/col coord
-        CHARACTER(CHRLEN3), ALLOCATABLE, PUBLIC:: COABDST( :,: )   ! MEDS GAI CO-ABS-DIST code
+        CHARACTER(FIPLEN3), ALLOCATABLE, PUBLIC:: COABDST( :,: )   ! MEDS GAI CO-ABS-DIST code
 
 !.........  Unsorted list of file numbers and records by source
         INTEGER, PUBLIC :: NSTRECS                      ! size of SRCSBYREC

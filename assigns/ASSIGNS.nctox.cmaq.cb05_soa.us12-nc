@@ -18,6 +18,12 @@
 #
 ## END HEADER ##############################################################
 
+## Determine operating system for compiling SMOKE
+#  Set executable format, makeing allownces for 64-bit archtecnture
+#  example: Linux2_x86_64ifort (Intel), Linux2_x86_64pg (Portland group), Linux2_x86_64gfort (gfortran)...
+#
+   setenv BIN    Linux2_x86_64ifort    # Intel Fortran 64-bit compiler
+
 ## I/O Naming roots
 #
    setenv INVID     nei2005      # Inventory input identifier
@@ -40,8 +46,8 @@
 ## Mobile episode variables
    setenv EPI_STDATE 2005191     # Julian start date
    setenv EPI_STTIME  000000     # start time (HHMMSS)
-   setenv EPI_RUNLEN 0480000     # run length (HHHMMSS)
-   setenv EPI_NDAY   2           # number of full run days
+   setenv EPI_RUNLEN 0240000     # run length (HHHMMSS)
+   setenv EPI_NDAY   1           # number of full run days
 
 ## Per-period environment variables
    setenv G_STDATE  2005191      # Julian start date
@@ -112,6 +118,7 @@ if ( $SMK_SOURCE == 'A' ) then
    setenv GSREF     $GE_DAT/gsref.$SPC.txt                       # Speciation x-ref
    setenv GSPRO     $GE_DAT/gspro.$SPC.txt                       # Speciation profiles
    setenv GSPRO_COMBO $GE_DAT/gspro_combo.$SPC.txt               # Speciation Combo prof
+
 endif
 #
 ## Biogenic input files
@@ -152,6 +159,7 @@ if ( $SMK_SOURCE == 'M' ) then
    setenv SMK_MVSPATH $GE_DAT/MOVES_lookuptables/                # Dir for MOVES lookup tab
    setenv MRCLIST     $SMK_MVSPATH/mrclist.${SRCABBR}.lst # List of MOVES lookup table list file
    setenv METMOVES    $SMKDAT/met/run_$METSCEN/SMOKE_DAILY_${IOAPI_GRIDNAME_1}.ncf  # Met4moves output
+   setenv CFPRO       $GE_DAT/cfpro_moves_test.txt
 endif
 #
 ## Point source input files
@@ -173,6 +181,10 @@ if ( $SMK_SOURCE == 'P' ) then
 endif
 #
 ## Shared input files
+   setenv GEOCODE_LEVEL1   $GE_DAT/geocode1_edgar.txt
+   setenv GEOCODE_LEVEL2   $GE_DAT/geocode2_edgar.txt
+   setenv GEOCODE_LEVEL3   $GE_DAT/geocode3_edgar.txt
+   setenv GEOCODE_LEVEL4   $GE_DAT/geocode4_edgar.txt
    setenv INVTABLE    $INVDIR/other/invtable_hapcap_cb05soa.txt  # Inventory table
    setenv GRIDDESC    $GE_DAT/GRIDDESC                           # Grid descriptions.
    setenv COSTCY      $GE_DAT/costcy.txt                         # country/state/county info
@@ -187,6 +199,8 @@ endif
    setenv GSCNV       $GE_DAT/gscnv.$SPC.txt                     # ROG to TOG conversion facs
 #   setenv PROCDATES   $GE_DAT/procdates.txt                      # time periods that Temporal should process
    setenv SOURCE_GROUPS $INVDIR/other/source_groups.nc.txt       # Source apportionment groups
+   setenv GRIDMASK   /nas01/depts/ie/cempd/EMAQ/Platform/GriddedEI/GEOCODE_EDGAR0.1.ncf
+
 
 #
 ## Override shared inputs
@@ -226,7 +240,6 @@ endif
 ## Meteorology IO/API input files (MCIP output files)
 #
    setenv METDAT $SMKDAT/met/run_$METSCEN
-   if ( $SMK_SOURCE == 'B' || $SMK_SOURCE == 'M' || $SMK_SOURCE == 'P' ) then
       setenv GRID_CRO_2D $METDAT/GRIDCRO2D
       setenv MET_CRO_2D  $METDAT/METCRO2D_$G_STDATE
       setenv MET_DOT_3D  $METDAT/METDOT3D_$G_STDATE
@@ -234,7 +247,6 @@ endif
       setenv MET_FILE2   $MET_CRO_2D
 #     setenv GRID_CRO_3D # no longer needed due to inline option in CMAQ 
 #     setenv MET_CRO_3D  # no longer needed due to inline option in CMAQ 
-   endif
 
 #
 ##########################################################################
@@ -410,20 +422,16 @@ endif
 
     endif
 
+#  Make directory for executables
+   setenv SMK_BIN "$SMKROOT/$BIN"
+   if( ! -e $SMK_BIN ) mkdir -p $SMK_BIN
+
 #  Create and change permissions for output directories
    $ASSIGNS/smk_mkdir
-
    if ( $status > 0 ) then
       set outstat = 1   
    endif
 #
-#  Get system-specific flags
-   source $ASSIGNS/sysflags
-
-   if ( $status > 0 ) then
-      set outstat = 1   
-   endif
-
 #  Delete appropriate NetCDF files for the programs that are being run
    if ( -e $ASSIGNS/smk_rmfiles.scr ) then
       $ASSIGNS/smk_rmfiles.scr

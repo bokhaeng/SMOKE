@@ -48,7 +48,6 @@
         INTEGER, PUBLIC :: NINVSIC2  ! no. unique 2-digit SICs in inventory
         INTEGER, PUBLIC :: NINVSCC   ! no. unique SCCs in inventory
         INTEGER, PUBLIC :: NINVSCL   ! no. unique left SCCs in inventory
-        INTEGER, PUBLIC :: NSCCPSIC  ! no. all SCCs for all SICs
         INTEGER, PUBLIC :: NINVIFIP  ! no. unique country/state/county codes
         INTEGER, PUBLIC :: NINVVTYP  ! no. unique vehicle types in inventory
         INTEGER, PUBLIC :: NINVMACT  ! no. unique MACTs in inventory
@@ -65,15 +64,18 @@
         CHARACTER(300), ALLOCATABLE :: LSTSTR( : )  ! contents of list-fmt inventory file
 
 !.........  Inventory format flags
+        LOGICAL, PUBLIC :: FIREFF10  ! true: FF10 FIRE format inventory
         LOGICAL, PUBLIC :: FIREFLAG  ! true: ORL FIRE format inventory
         LOGICAL, PUBLIC :: FF10FLAG  ! true: FF10 format inventories
         LOGICAL, PUBLIC :: MEDSFLAG  ! true: Pregridded FF10 format inventories
+        LOGICAL, PUBLIC :: APIFLAG   ! true: Pregridded IOAPI format inventories
+        LOGICAL, PUBLIC :: NCDFLAG   ! true: Pregridded raw NetCDF format inventories
 
 !.........  Unique lists of source characteristics and associated arrays...
 
 !.........  SIC arrays dimensioned by NINVSIC
-        INTEGER, ALLOCATABLE, PUBLIC :: INVSIC ( : ) ! SICs
-        INTEGER, ALLOCATABLE, PUBLIC :: INVSIC2( : ) ! 2-digit SICs
+        CHARACTER(SICLEN3), ALLOCATABLE, PUBLIC :: INVSIC ( : ) ! SICs
+        CHARACTER(SICLEN3), ALLOCATABLE, PUBLIC :: INVSIC2( : ) ! 2-digit SICs
         CHARACTER(SDSLEN3), ALLOCATABLE, PUBLIC :: SICDESC( : ) ! descrptn
 
 !.........  SCC arrays dimensioned by NINVSCC
@@ -83,7 +85,6 @@
         CHARACTER(SDSLEN3), ALLOCATABLE, PUBLIC :: SCCDESC( : ) ! descrptn
 
 !.........  Country/state/county codes dimensioned by NINVIFIP
-        INTEGER, ALLOCATABLE, PUBLIC :: INVIFIP( : )
         CHARACTER(FIPLEN3), ALLOCATABLE, PUBLIC :: INVCFIP( : )
 
 !.........  Vehicle types dimensioned by NINVVTYP
@@ -98,12 +99,12 @@
         CHARACTER(SDSLEN3), ALLOCATABLE, PUBLIC :: NAICSDESC( : ) ! descrptn
 
 !.........  ORIS arrays
-        INTEGER,            ALLOCATABLE, PUBLIC :: INVORFP( : ) ! FIPS for ORIS in inventory
         INTEGER,            ALLOCATABLE, PUBLIC :: OBSRCBG( : ) ! 1st source per ORIS/boiler
         INTEGER,            ALLOCATABLE, PUBLIC :: OBSRCNT( : ) ! source count per ORIS/boiler
         INTEGER,            ALLOCATABLE, PUBLIC :: OBSRCNM( : ) ! src numbers matching ORIS/boiler
         LOGICAL,            ALLOCATABLE, PUBLIC :: IORSMTCH( : ) ! true: inventory ORIS matched to CEM
         CHARACTER(ORSLEN3), ALLOCATABLE, PUBLIC :: INVORIS( : ) ! unique ORIS
+        CHARACTER(FIPLEN3), ALLOCATABLE, PUBLIC :: INVORFP( : ) ! FIPS for ORIS in inventory
         CHARACTER(DSCLEN3), ALLOCATABLE, PUBLIC :: INVODSC( : ) ! plant description from inventory
         CHARACTER(OBRLEN3), ALLOCATABLE, PUBLIC :: ORISBLR( : ) ! ORIS // boiler
 

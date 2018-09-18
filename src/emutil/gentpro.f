@@ -97,7 +97,7 @@ C...........   EXTERNAL FUNCTIONS and their descriptions:
         CHARACTER(14)   MMDDYY
         CHARACTER(16)   PROMPTMFILE
         CHARACTER(16)   VERCHAR
-        INTEGER         FIND1
+        INTEGER         FIND1, FINDC
         INTEGER         FIND1FIRST
         INTEGER         GETIFDSC
         INTEGER         GETFLINE
@@ -122,10 +122,10 @@ C...........   EXTERNAL FUNCTIONS and their descriptions:
      &               ENVREAL, INDEX1, MMDDYY, PROMPTFFILE, PROMPTMFILE,
      &               SECSDIFF, SETENVVAR, WKDAY, GETEFILE, INTLIST, 
      &               FIND1FIRST, STRLIST, STR2INT, BLKORCMT, VERCHAR,
-     &               YR2DAY, ENVYN, STR2REAL
+     &               YR2DAY, ENVYN, STR2REAL, FINDC
 
 C.....  Define temporal profile type constants for enumeration
-        CHARACTER(50), PARAMETER :: CVSW = '$Name$' ! CVS release tag
+        CHARACTER(50), PARAMETER :: CVSW = '$Name SMOKEv4.6_Sep2018$' ! CVS release tag
 
         INTEGER, PARAMETER :: MXVAR  = 100
         INTEGER, PARAMETER :: MXSEG  = 16
@@ -166,10 +166,10 @@ C...........   integer arrays
         INTEGER, ALLOCATABLE :: MATCHED ( :,: )    ! FIPS/SCC/POL matched source
 
 C...........  character arrays
-        CHARACTER(16)                  SEGMENT( MXSEG )
-        CHARACTER(256), ALLOCATABLE :: METLIST( : )       ! listing of met file names
-        CHARACTER(10) , ALLOCATABLE :: SCCLIST( : )       ! listing of SCCs
-        CHARACTER(256), ALLOCATABLE :: CSCCFIP( : )       ! tmp FIPS/SCC x-ref entries
+        CHARACTER(16)                      SEGMENT( MXSEG )
+        CHARACTER(256)    , ALLOCATABLE :: METLIST( : )       ! listing of met file names
+        CHARACTER(SCCLEN3), ALLOCATABLE :: SCCLIST( : )       ! listing of SCCs
+        CHARACTER(256)    , ALLOCATABLE :: CSCCFIP( : )       ! tmp FIPS/SCC x-ref entries
 
 C...........   Parameter array
         CHARACTER(16), PARAMETER :: TPROTYPES( NTPRO ) =
@@ -223,6 +223,7 @@ C...........   Other local variables:
         INTEGER    IOS         ! temporary I/O status
         INTEGER    IREC        ! temporary input line number
         INTEGER    IFIP,NTP    ! temporary FIPS code
+        INTEGER    ISRGFIP     ! temporary surrogate FIPS code
         INTEGER    HOURIDX     ! current hour of the day
         INTEGER    JDATE       ! input date counter (YYYYDDD) in GMT
         INTEGER    JTIME       ! input time counter (HHMMSS)  in GMT
@@ -288,12 +289,12 @@ C...........   Other local variables:
 
         CHARACTER(SCCLEN3) CSCC        !  SCC code
         CHARACTER(FIPLEN3) CFIPS       !  FIPS code
-        CHARACTER(5)       TPROID      !  5-digit tpro id
+        CHARACTER(FIPLEN3) TPROID      !  tpro id
         CHARACTER(1000)    CSCCLIST    !  tmp SCC list line buffer 
         CHARACTER(16)      CPOL,TPRO   !  Pollutant code, Profile types 
-        CHARACTER(10)      TSCC        !  tmp SCC code
-        CHARACTER(16)      COORUNIT    !  coordinate system projection units
-        CHARACTER(80)      GDESC       !  grid description
+        CHARACTER(SCCLEN3) TSCC        !  tmp SCC code
+        CHARACTER(IOVLEN3) COORUNIT    !  coordinate system projection units
+        CHARACTER(IODLEN3) GDESC       !  grid description
         CHARACTER(16)      SRG_CNTRY   !  surrogate country
         CHARACTER(256)     LINE        !  line buffer
         CHARACTER(256)     FULLNAME    !  full file name
@@ -646,11 +647,10 @@ C.........  Allocate arrays for county time zone
 
 C.........  Assign time zone to inventory counties
         DO I = 1, NSRGFIPS
-            FIPS = SRGFIPS( I )
-            J = FIND1( FIPS, NCOUNTY, CNTYCOD )
+            J = FINDC( SRGFIPS( I ), NCOUNTY, CNTYCOD )
             IF( J < 1 ) THEN
-                WRITE( MESG,94010 ) 'ERROR: Could not find time zone '//
-     &               'for county :', FIPS, ' from COSTCY file'
+                MESG = 'ERROR: Could not find time zone for county '
+     &               // SRGFIPS( I ) // ' from COSTCY file'
                 CALL M3EXIT( PROGNAME, 0, 0, MESG, 2 )
             ELSE
                 TZONES( I ) = CNTYTZON( J )
@@ -661,7 +661,7 @@ C.........  count no of states in modeling modain
         NSTA = 0
         PSTA = 0
         DO I = 1, NSRGFIPS
-            ISTA = INT( SRGFIPS( I ) / 1000 ) * 1000
+            ISTA = STR2INT( SRGFIPS( I )( 8:9 ) )
             IF( ISTA /= PSTA ) THEN
                 NSTA = NSTA + 1
                 PSTA = ISTA
@@ -676,7 +676,7 @@ C.........  Allocate array
         NS = 0
         PSTA = 0
         DO I = 1, NSRGFIPS
-            ISTA = INT( SRGFIPS( I ) / 1000 ) * 1000
+            ISTA = STR2INT( SRGFIPS( I )( 8:9 ) )
             IF( ISTA /= PSTA ) THEN
                 NS = NS + 1
                 SRGSTA( NS ) = ISTA
@@ -728,9 +728,10 @@ C.................  Sparse line
 
                 DO S = 1, NSRGFIPS
 
-                    ISTA = INT( SRGFIPS( S ) / 1000 ) * 1000
+                    ISTA = STR2INT( SRGFIPS( S )( 8:9 ) )
+                    ISRGFIP = STR2INT( SRGFIPS( S ) )
 
-                    IF( IFIP == ISTA .OR. IFIP == SRGFIPS( S ) ) THEN
+                    IF( IFIP == ISTA .OR. IFIP == ISRGFIP ) THEN
                         RWC_TEMP( S ) = DTEMP
                     END IF
 
@@ -828,6 +829,8 @@ C............  Skip blank or comment lines
 
             CSCC = TRIM   ( SEGMENT( 1 ) )
             FIPS = STR2INT( SEGMENT( 2 ) )
+            CFIPS = TRIM  ( SEGMENT( 2 ) )
+            CALL PADZERO( CFIPS )
             CPOL = TRIM   ( SEGMENT( 7 ) )
             TPRO = TRIM   ( SEGMENT( 8 ) )
 
@@ -841,7 +844,7 @@ C.............  temporary limit for supporting older TREF format (v3.5.1 or earl
             IF( CPOL == '' .OR. CPOL == '0' ) CPOL = '-9'
 
             L0 = INDEX1( CSCC, NSCC, SCCLIST )
-            L1 = FIND1 ( FIPS, NSRGFIPS, SRGFIPS )
+            L1 = FINDC ( CFIPS, NSRGFIPS, SRGFIPS )
 
             LL = 0
             NS = 0
@@ -849,7 +852,8 @@ C.............  find matched SCC entries
             IF( L0 > 0 ) THEN
 
                 IF( L1 < 1 ) THEN
-                    NS = FIND1( FIPS, NSTA, SRGSTA )
+                    ISTA = STR2INT( CFIPS( 8:9 ) )
+                    NS = FIND1( ISTA, NSTA, SRGSTA )
                     IF( NS   > 0 ) L1 = NSRGFIPS + NS         ! state-specific entry in XREF fle
                     IF( FIPS < 1 ) L1 = NSRGFIPS + NSTA + 1   ! SCC-specific ultimate default (No FIPS)
                 END IF
@@ -916,14 +920,15 @@ C.........  Find ultimate FIPS/SCC x-ref when no matched in TREF
                 L1 = J
 
                 CSCC = SCCLIST( I )
-                WRITE( CFIPS,'(I6.6)' ) SRGFIPS( J )
-                ISTA = INT( SRGFIPS( J )/1000 ) * 1000
+                CFIPS = SRGFIPS( J )
+                CALL PADZERO( CFIPS )
 
 C.................  Check secondly SCC/FIPS specific entries
                 LL = MATCHED( L0,L1 )
  
 C.................  Check a list of state-specific entry first before using default profiles
                 IF( LL < 1 ) THEN
+                    ISTA = STR2INT( CFIPS( 8:9 ) )
                     NS = FIND1 ( ISTA, NSTA, SRGSTA )
                     IF( NS > 0  ) L1 = NSRGFIPS + NS         ! state-specific entry in XREF fle
                     LL = MATCHED( L0,L1 )
@@ -969,8 +974,8 @@ C.................  Concatenate all segments into a string
 
                 END IF
 
-                WRITE( TPROID, '(I5.5)' ) SRGFIPS( J )
-
+                TPROID = CFIPS
+                
 C.................  Append new MONTHLY temporal profile ID to new/existing x-ref entry
                 IF( MONAVER ) THEN
                     WRITE( XODEV,'( A )' ) TRIM(LINE)//'MONTHLY,'//TPROID//',""'
@@ -1451,8 +1456,8 @@ C.................  Skip if begining/ending hours are out of range
 
 C.................  Skip if data is missing
                 IF( TASRC( S ) == 0.0 ) THEN  ! temp in Kevin 
-                    WRITE( MESG,94010 )'ERROR: Incorrect temperature '//
-     &                  'value on'//MMDDYY( JDATE )//' of county ',
+                     MESG = 'ERROR: Incorrect temperature '//
+     &                  'value on'//MMDDYY( JDATE )//' of county '//
      &                  SRGFIPS( S )
                    CALL M3EXIT( PROGNAME, JDATE, JTIME, MESG, 2 )
                 END IF
@@ -1619,8 +1624,8 @@ C.........  Reset annual total to 1.0 if it is zero
             IF( ANNSRC( S ) == 0.0 ) THEN
                 ANNSRC( S ) = 1.0
                 DO I = 1, NSCC
-                    WRITE( MESG,94010 ) 'CRITICAL WARNING: All temporal'//
-     &               ' profiles are ZERO for county: ', SRGFIPS( S ), 
+		     MESG = 'CRITICAL WARNING: All temporal'//
+     &               ' profiles are ZERO for county: '//SRGFIPS( S )// 
      &               ' and SCC: ' // SCCLIST( I )
                     CALL M3MSG2( MESG ) 
                 END DO
@@ -1654,7 +1659,7 @@ C.........  Compute month of year temporal profiles
 
 C.............  Output monthly profiles by county
             DO S = 1, NSRGFIPS
-                WRITE( MODEV, "(I5.5, 12(A,E10.3))" ) SRGFIPS( S ),
+                WRITE( MODEV, "(A,12(A,E10.3))" ) SRGFIPS( S ),
      &              ((',', PROF_MON( S,NP )), NP = 1,12 )
             END DO
 
@@ -1685,7 +1690,7 @@ C.................  Output daily profiles by county
                 IF( MONTH /= TMPMNTH ) THEN
 
                     DO S = 1, NSRGFIPS
-                        WRITE( DODEV, "(I5.5,A,I2.2,31(A,E10.3))" )
+                        WRITE( DODEV, "(A,A,I2.2,31(A,E10.3))" )
      &                      SRGFIPS( S ), ',', MONTH,
      &                      ( (',', PROF_DAY( S,NP ) ), NP = 1,31 )
                     END DO

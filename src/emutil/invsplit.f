@@ -69,7 +69,7 @@ C.........  EXTERNAL FUNCTIONS and their descriptions:
      &              PROMPTFFILE, STR2INT
 
 C...........   LOCAL PARAMETERS
-        INTEGER   NSEG = 80
+        INTEGER, PARAMETER ::   NSEG = 80
 
 C.........  Allocatable arrays...
 
@@ -263,8 +263,6 @@ C.............  Skip header lines and write them to the output file
 
 C.............  Convert state code to integer
             SELECT CASE ( IFMT )
-            CASE ( IDAFMT )
-                STA = STR2INT( LINE( 1:2 ) )
 
             CASE ( ORLFMT, ORLNPFMT )
                 CALL PARSLINE( LINE, NSEG, SEGMENT )
@@ -273,13 +271,6 @@ C.............  Convert state code to integer
             CASE ( FF10FMT )
                 CALL PARSLINE( LINE, NSEG, SEGMENT )
                 STA = INT( STR2INT( SEGMENT(2) ) / 1000 )
-
-            CASE ( EMSFMT )
-                STA = STR2INT( LINE( 1:2 ) )
-
-            CASE ( EPSFMT )
-                IF( CRL .EQ. 'A' ) STA = STR2INT( LINE( 9:10 ) )
-                IF( CRL .EQ. 'P' ) STA = STR2INT( LINE( 12:13 ) )
 
             CASE DEFAULT
                 WRITE( MESG,94010 ) 'Cannot split file with ' // 

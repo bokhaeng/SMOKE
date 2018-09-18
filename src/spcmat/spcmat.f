@@ -79,7 +79,7 @@ C...........   EXTERNAL FUNCTIONS and their descriptions:
 C.........  LOCAL PARAMETERS and their descriptions:
 
         CHARACTER(50), PARAMETER :: 
-     &  CVSW = '$Name$'  ! CVS revision tag
+     &  CVSW = '$Name SMOKEv4.6_Sep2018$'  ! CVS revision tag
 
 C...........   LOCAL VARIABLES and their descriptions:
 
@@ -148,7 +148,6 @@ C.........   Other local variables
 
         LOGICAL       :: EFLAG   = .FALSE. !  error flag
         LOGICAL       :: KFLAG   = .FALSE. !  if pol to pol convert file or not
-        LOGICAL       :: MFLAG   = .FALSE. !  true: mobile codes file needed
         LOGICAL       :: TFLAG   = .FALSE. !  true: tagging file needed
         LOGICAL       :: MASSOUT = .TRUE.  !  true: output mass-based matrix
         LOGICAL       :: MOLEOUT = .TRUE.  !  true: output mole-based matrix
@@ -244,21 +243,21 @@ C.........  Set inventory variables to read for specific source categories
         IF( CATEGORY .EQ. 'AREA' ) THEN
             NINVARR = 5
             IVARNAMS( 3 ) = 'CMACT'
-            IVARNAMS( 4 ) = 'ISIC'
-            IVARNAMS( 5 ) = 'IFIP'
+            IVARNAMS( 4 ) = 'CISIC'
+            IVARNAMS( 5 ) = 'CIFIP'
 
         ELSE IF( CATEGORY .EQ. 'MOBILE' ) THEN
             NINVARR = 6
             IVARNAMS( 3 ) = 'IRCLAS'
             IVARNAMS( 4 ) = 'IVTYPE'
             IVARNAMS( 5 ) = 'CVTYPE'
-            IVARNAMS( 6 ) = 'IFIP'
+            IVARNAMS( 6 ) = 'CIFIP'
 
         ELSE IF( CATEGORY .EQ. 'POINT' ) THEN
             NINVARR = 5
             IVARNAMS( 3 ) = 'CMACT'
-            IVARNAMS( 4 ) = 'ISIC'
-            IVARNAMS( 5 ) = 'IFIP'
+            IVARNAMS( 4 ) = 'CISIC'
+            IVARNAMS( 5 ) = 'CIFIP'
         END IF
 
 C.........  Allocate memory for and read required inventory characteristics

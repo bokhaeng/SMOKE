@@ -44,6 +44,8 @@ C.........  MODULES for public variables
 C.........  This module contains the information about the source category
         USE MODINFO, ONLY: NIPPA, BYEAR, CATEGORY, CATLEN
 
+        USE MODLISTS, ONLY: FIREFLAG
+
         IMPLICIT NONE
 
 C...........   EXTERNAL FUNCTIONS
@@ -243,16 +245,10 @@ C.............  Read day-specific or hour-specific file
      &                        EDATE, ETIME, EASTAT, SPSTAT )
 
             ELSE IF( FILFMT( IFIL ) .EQ. FF10FMT ) THEN
-
+                FIREFLAG = .FALSE.  ! to process ptfire in FF10 format as of SMOKEv3.7
                 CALL RDFF10PD( IDEV, TZONE, OUTSTEP, MXPDSRC, DFLAG,
      &                        NFLAG, NEWLOOP, DAYFLAG, SDATE, STIME,
      &                        EDATE, ETIME, EASTAT, SPSTAT )
-
-            ELSE IF( FILFMT( IFIL ) .EQ. EPSFMT ) THEN
-
-                CALL RDEPSPD( IDEV, TZONE, INSTEP, OUTSTEP, MXPDSRC, 
-     &                        DFLAG, NFLAG, NEWLOOP, DAYFLAG, 
-     &                        SDATE, STIME, EDATE, ETIME, EASTAT )
 
             ELSE IF ( FILFMT( IFIL ) .EQ. CEMFMT ) THEN
 

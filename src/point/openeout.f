@@ -74,7 +74,7 @@ C..........    Subroutine arguments and their descriptions
 
 C...........   LOCAL PARAMETERS
         CHARACTER(50), PARAMETER :: 
-     &  CVSW = '$Name$' ! CVS release tag
+     &  CVSW = '$Name SMOKEv4.6_Sep2018$' ! CVS release tag
 
 C...........   Other local variables
         INTEGER         J      ! indices and counters
@@ -127,6 +127,9 @@ C               the output file
                 MESG = 'Could not get Models-3 grid description.'
                 CALL M3EXIT( PROGNAME, 0, 0, MESG, 2 )            
             END IF            
+
+            COORUN3D = 'METERS '
+            IF ( GDTYP3D .EQ. 1 ) COORUN3D = 'DEGREES '
 
 C............. Finalize i/o api header fields
 C............. NOTE - this is a time-independent file, but the Plume Dynamics

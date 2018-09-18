@@ -77,7 +77,7 @@ C...........   Other local variables
         INTEGER         I, J       ! counters and indices
 
         INTEGER, SAVE:: ICC     !  position of CNTRY in CTRYNAM
-        INTEGER         INY     !  inventory year
+        INTEGER, SAVE:: INY     !  inventory year
         INTEGER         IOS     !  i/o status
         INTEGER, SAVE:: NDAT = -1 !  number of pollutants in file
  
@@ -136,8 +136,9 @@ C.........  Separate line into segments
 
 C.........  Use the file format definition to parse the line into
 C           the various data fields
-        CALL PADZERO( SEGMENT( 1 )( 1:5 ) )
-        WRITE( CFIP, '(I1,A)' ) ICC, SEGMENT( 1 )( 1:5 )  ! country code of FIPS     
+        CFIP = REPEAT( '0', FIPLEN3 )
+        WRITE( CFIP( FIPEXPLEN3+1:FIPEXPLEN3+1 ), '(I1)' ) ICC  ! country code of FIPS
+        CFIP( FIPEXPLEN3+2:FIPEXPLEN3+6 ) = ADJUSTR( SEGMENT( 1 )( 1:5 ) )  ! state/county code
 
         FIREID = SEGMENT( 2 )   ! fire ID
         LOCID  = SEGMENT( 3 )   ! location ID

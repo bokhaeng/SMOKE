@@ -1,5 +1,5 @@
 
-        SUBROUTINE GENRPRT( FDEV, RCNT, ADEV, ENAME, TNAME,
+        SUBROUTINE GENRPRT( FDEV, RCNT, ADEV, MDEV, ENAME, TNAME,
      &                      LNAME, OUTFMT, SMAT, ZEROFLAG, EFLAG )
 
 C***********************************************************************
@@ -18,8 +18,11 @@ C
 C  SUBROUTINES AND FUNCTIONS CALLED:
 C
 C  REVISION  HISTORY:
-C     Created 7/2000 by M Houyoux
+C   Created 7/2000 by M Houyoux
 C
+C   Version 9/2014 by C Coats:  use parallel-mode sparse binning matrices 
+C   MODREPBN:<NBINS,ISRCB,GFACB>.  Array TMPBIN reorganization to match
+C   Fortran storage order.
 C***********************************************************************
 C  
 C Project Title: Sparse Matrix Operator Kernel Emissions (SMOKE) Modeling
@@ -43,15 +46,17 @@ C***********************************************************************
 
 C...........   MODULES for public variables
 C...........   This module is the inventory arrays
-        USE MODSOURC, ONLY: POLVAL
+        USE MODSOURC, ONLY: CSOURC, POLVAL
 
 C.........  This module contains Smkreport-specific settings
         USE MODREPRT, ONLY: QAFMTL3, RPT_, SDATE, STIME, RPTNSTEP,
      &                      AFLAG, ASCREC, NSTEPS, EMLAYS, TSTEP,
-     &                      ALLRPT, ALLOUTHR, UCNVFAC, DLFLAG
+     &                      ALLRPT, ALLOUTHR, UCNVFAC, DLFLAG,
+     &                      LOC_BEGP, LOC_ENDP
 
 C.........  This module contains report arrays for each output bin
         USE MODREPBN, ONLY: NSVARS, NOUTBINS, NOUTREC, BINDATA,
+     &                      NBINS, ISRCB, GFACB,
      &                      TODOUT, TOSOUT, SPCTOTPR, SPCTOINV,
      &                      INVIDX, TPRIDX, INVTOPRJ, INVTOCMU,
      &                      SPCIDX, OUTSRC, OUTBIN, OUTGFAC,
@@ -64,7 +69,7 @@ C.........  This module contains the control packet data and control matrices
         USE MODCNTRL, ONLY: ACUMATX, PRMAT
 
 C.........  This module contains the information about the source category
-        USE MODINFO, ONLY: NSRC, NIPPA, EAREAD, EANAM
+        USE MODINFO, ONLY: NSRC, NIPPA, EAREAD, EANAM, MXCHRS, NCHARS
 
         IMPLICIT NONE
 
@@ -83,27 +88,31 @@ C...........   EXTERNAL FUNCTIONS
         EXTERNAL     CRLF, MULTUNIT, SECSDIFF
 
 C...........   SUBROUTINE ARGUMENTS
-        INTEGER     , INTENT (IN) :: FDEV    ! output file unit number
-        INTEGER     , INTENT (IN) :: RCNT    ! report number
-        INTEGER     , INTENT (IN) :: ADEV    ! unit no. ASCII elevated file
-        CHARACTER(*), INTENT (IN) :: ENAME   ! inventory file name
-        CHARACTER(*), INTENT (IN) :: TNAME   ! hourly data file name
-        CHARACTER(*), INTENT (IN) :: LNAME   ! layer fractions file name
+        INTEGER     , INTENT(IN   ) :: FDEV    ! output file unit number
+        INTEGER     , INTENT(IN   ) :: RCNT    ! report number
+        INTEGER     , INTENT(IN   ) :: ADEV    ! unit no. ASCII elevated file
+        INTEGER     , INTENT(IN   ) :: MDEV    ! unit no. source mapping file
+        CHARACTER(*), INTENT(IN   ) :: ENAME   ! inventory file name
+        CHARACTER(*), INTENT(IN   ) :: TNAME   ! hourly data file name
+        CHARACTER(*), INTENT(IN   ) :: LNAME   ! layer fractions file name
         CHARACTER(QAFMTL3),
-     &                INTENT (IN) :: OUTFMT  ! output record format
-        REAL        , INTENT (IN) :: SMAT( NSRC, NSVARS ) ! mole spc matrix
-        LOGICAL     , INTENT (IN) :: ZEROFLAG! true: report zero values
-        LOGICAL     , INTENT(OUT) :: EFLAG   ! true: error occured
+     &                INTENT(IN   ) :: OUTFMT  ! output record format
+        REAL        , INTENT(IN   ) :: SMAT( NSRC, NSVARS ) ! mole spc matrix
+        LOGICAL     , INTENT(INOUT) :: ZEROFLAG! true: report zero values
+        LOGICAL     , INTENT(INOUT) :: EFLAG   ! true: error occured
+
+C...........   Arrays for source characteristics output formatting
+        CHARACTER(300) CHARS ( MXCHRS ) !  source fields for output
+        LOGICAL, ALLOCATABLE, SAVE :: LF ( : ) ! true if column should be output
 
 C...........   Local allocatable arrays
         INTEGER, ALLOCATABLE, SAVE :: SIDX( : ) ! spc/dat idx for incl pol/act
-
-        REAL, ALLOCATABLE, SAVE :: BINARR( : )  ! helping sum to bins of data
-        REAL, ALLOCATABLE, SAVE :: LFRAC1L( : ) ! layer fractions
-        REAL, ALLOCATABLE       :: TMPBIN( :,:,:,: ) ! array layered data per each time step
+        REAL   , ALLOCATABLE       :: LFRAC1L( : ) ! layer fractions
+        REAL   , ALLOCATABLE       :: TMPBIN( :,:,:,: ) ! array layered data per each time step
 
 C...........   Other local variables
-        INTEGER          E, H, I, J, K, L, N, S, T, V   ! counters and indices
+        INTEGER         E, H, I, J, K, L, M, N, NC, S, T, V   ! counters and indices
+        INTEGER         IS, ID, IE, IP, SE, SP, SS
 
         INTEGER         IOS               ! i/o status
         INTEGER         JDATE             ! Julian date
@@ -116,17 +125,19 @@ C...........   Other local variables
         INTEGER         SRCNO             ! source no. from ASCII elevated file
 
         REAL            EMISVAL           ! emissions values from ASCII elevated file
+        REAL            F
+        REAL*8          BSUM
 
         LOGICAL      :: FIRSTIME = .TRUE.  ! true: first time routine called
+        LOGICAL      :: FIRSTOUT = .TRUE.  ! true: first time routine called
         LOGICAL      :: SFLAG    = .FALSE. ! true: speciation applies to rpt
 
         CHARACTER(10)         POL         ! species from ASCII elevated file
-        CHARACTER(16)      :: RNAME = 'IOAPI_DAT' ! logical name for reading pols
         CHARACTER(256)        MESG        !  message buffer
         CHARACTER(300)        LINE        !  tmp line buffer
         CHARACTER(IOVLEN3) :: VBUF        !  tmp variable name
 
-        CHARACTER(16) :: PROGNAME = 'GENRPRT' ! program name
+        CHARACTER(16), PARAMETER :: PROGNAME = 'GENRPRT' ! program name
 
 C***********************************************************************
 C   begin body of subroutine GENRPRT
@@ -139,33 +150,40 @@ C.............  Allocate memory for flagging output non-speciated data
             CALL CHECKMEM( IOS, 'SIDX', PROGNAME )
             
             FIRSTIME = .FALSE.
+        END IF
 
+C.............  Allocate memory for LF if not available already
+        IF( RPT_%SRCMAP ) THEN
+            IF( ALLOCATED( LF ) ) DEALLOCATE( LF )
+            ALLOCATE( LF( MXCHRS ), STAT=IOS )
+            CALL CHECKMEM( IOS, 'LF', PROGNAME )
+            LF( 1:NCHARS ) = .TRUE.
+            WRITE( MDEV,'(A)' ) 'GROUPID, SRCID, FIPS, FAC_ID, UNIT_ID, REL_POINTID, PROC_ID'
+            ZEROFLAG = .TRUE.    ! for a proper match, need to output all sources
         END IF
 
 C.........  Report-specific local settings
         NDATA = ALLRPT( RCNT )%NUMDATA
-        RPT_ = ALLRPT( RCNT )     
+        RPT_  = ALLRPT( RCNT )     
 
         SFLAG = ( RPT_%USESLMAT .OR. RPT_%USESSMAT )
 
 C.........  Allocate local memory for reading input data
+
         N  = NIPPA
         IF( RPT_%USEHOUR ) N = NTPDAT
 
-        ALLOCATE( POLVAL( NSRC, N ), STAT=IOS )
-        CALL CHECKMEM( IOS, 'POLVAL', PROGNAME )
-        ALLOCATE( LFRAC1L( NSRC ), STAT=IOS )
-        CALL CHECKMEM( IOS, 'LFRAC1L', PROGNAME )
-
-C.........  Allocate local memory for bin helper summing array
-        ALLOCATE( BINARR( NOUTBINS ), STAT=IOS )
-        CALL CHECKMEM( IOS, 'BINARR', PROGNAME )
+        ALLOCATE( POLVAL( NSRC, N ),
+     &           LFRAC1L( NSRC ),
+     &           BINDATA( NOUTBINS, NDATA ), STAT=IOS )
+        CALL CHECKMEM( IOS, 'POLVAL...BINDATA', PROGNAME )
+        BINDATA = 0.0           !  array
 
         IF( DLFLAG ) THEN
-            ALLOCATE( TMPBIN( EMLAYS, RPTNSTEP, NOUTBINS, NDATA )
+            ALLOCATE( TMPBIN( NOUTBINS, NDATA, EMLAYS, RPTNSTEP )
      &                       ,STAT=IOS )
             CALL CHECKMEM( IOS, 'TMPBIN', PROGNAME )
-            TMPBIN = 0 ! array
+            TMPBIN = 0.0    ! array
         END IF
 
 C.........  Set variable loop maxmimum based on speciation status
@@ -176,6 +194,7 @@ C.........  Initialize status of output non-speciated data for this report
         SIDX = 0    ! array
 
 C.........  Loop through time steps
+        FIRSTOUT = .TRUE.
         JDATE = SDATE
         JTIME = STIME
         DO T = 1, RPTNSTEP
@@ -337,56 +356,119 @@ C   N: the formulas below (may be a good idea to apply in separate section?)
 
 C.....................  If speciation, apply speciation factors to appropriate
 C                       pollutant and emission types.
+
                     IF( TODOUT( E,RCNT )%SPCYN ) THEN
 
 C.........................  If current speciation variable used for this report
+
                         IF( TOSOUT( V,RCNT )%AGG .GT. 0 ) THEN
 
-C.............................  Initialize temporary bin sum array
-                            BINARR = 0   ! array
-
 C.............................  Set index from global to actually input spc vars
-                            K = SPCIDX( V )
+C.............................  Set BINDATA-indices
+
+                            K  = SPCIDX( V )
+
+                            IS = TOSOUT(V,RCNT)%SPC
+                            IE = TOSOUT(V,RCNT)%ETPSPC
+                            IP = TOSOUT(V,RCNT)%PRCSPC
+                            SE = TOSOUT(V,RCNT)%SUMETP
+                            SP = TOSOUT(V,RCNT)%SUMPOL
+                            SS = TOSOUT(V,RCNT)%SUMSPC
 
 C.............................  Sum gridded output records into temporary bins
 C.............................  Gridding factor has normalization by cell area
+
                             IF( RPT_%USEGMAT ) THEN
-                                DO I = 1, NOUTREC
-                                    S = OUTSRC( I )
-                                    N = OUTBIN( I )
-                                    BINARR( N ) = BINARR ( N ) + 
-     &                                            OUTGFAC( I )   *
-     &                                            POLVAL ( S,J ) * 
-     &                                            SMAT   ( S,K ) *
-     &                                            LFRAC1L( S )   *
-     &                                            PRMAT  ( S,KP) *
-     &                                            ACUMATX( S,KM) *
-     &                                          BINPOPDIV( N )
+
+C.............................  Sum gridded output records into temporary bins
+C.............................  Gridding factor has normalization by cell area
+
+!$OMP                           PARALLEL DO
+!$OMP&                           DEFAULT( NONE ),
+!$OMP&                            SHARED( NOUTBINS, NBINS, ISRCB, GFACB,
+!$OMP&                                    POLVAL, SMAT, LFRAC1L, PRMAT,
+!$OMP&                                    ACUMATX, BINPOPDIV, BINDATA,
+!$OMP&                                    J, K, KP, KM, IS, IE, IP, SE, SP, SS ),
+!$OMP&                           PRIVATE( N, BSUM, M, S, F )
+
+                                DO N = 1, NOUTBINS
+
+                                    BSUM = 0.0D0
+                                    DO M = NBINS( N-1 )+1, NBINS( N )
+                                        S = ISRCB( M )
+                                        F = GFACB( M )
+                                        BSUM = BSUM + F * POLVAL ( S,J ) *
+     &                                                    SMAT   ( S,K ) *
+     &                                                    LFRAC1L( S )   *
+     &                                                    PRMAT  ( S,KP) *
+     &                                                    ACUMATX( S,KM)
+                                        IF( RPT_%SRCMAP ) THEN
+                                            CALL PARSCSRC( CSOURC( S ), MXCHRS, LOC_BEGP,
+     &                                                     LOC_ENDP, LF, NC, CHARS )
+                                            IF( FIRSTOUT ) THEN
+                                                WRITE( MDEV,94020 ) N, S, ( TRIM(CHARS(K)) ,K=1,NC-1 )
+                                            END IF
+                                        END IF
+
+                                    END DO
+
+                                    !!  .....  Add temporary bins values to output columns
+                                    BSUM = BSUM * BINPOPDIV( N )
+                                    IF ( IS .GT. 0 ) BINDATA( N,IS ) = BINDATA( N,IS ) + BSUM
+                                    IF ( IE .GT. 0 ) BINDATA( N,IE ) = BINDATA( N,IE ) + BSUM
+                                    IF ( IP .GT. 0 ) BINDATA( N,IP ) = BINDATA( N,IP ) + BSUM
+                                    IF ( SE .GT. 0 ) BINDATA( N,SE ) = BINDATA( N,SE ) + BSUM
+                                    IF ( SP .GT. 0 ) BINDATA( N,SP ) = BINDATA( N,SP ) + BSUM
+                                    IF ( SS .GT. 0 ) BINDATA( N,SS ) = BINDATA( N,SS ) + BSUM
+
                                 END DO
+                                FIRSTOUT = .FALSE.
+
+                            ELSE      !  else not usegmat
 
 C.............................  Sum non-gridded output records into tmp bins
-                            ELSE
-                                DO I = 1, NOUTREC
-                                    S = OUTSRC( I )
-                                    N = OUTBIN( I )
-                                    BINARR( N ) = BINARR ( N ) + 
-     &                                            POLVAL ( S,J ) * 
-     &                                            SMAT   ( S,K ) *
-     &                                            LFRAC1L( S )   *
-     &                                            PRMAT  ( S,KP) *
-     &                                            ACUMATX( S,KM) *
-     &                                          BINPOPDIV( N )
+
+!$OMP                           PARALLEL DO
+!$OMP&                           DEFAULT( NONE ),
+!$OMP&                            SHARED( NOUTBINS, NBINS, ISRCB,
+!$OMP&                                    POLVAL, SMAT, LFRAC1L, PRMAT,
+!$OMP&                                    ACUMATX, BINPOPDIV, BINDATA,
+!$OMP&                                    J, K, KP, KM, IS, IE, IP, SE, SP, SS ),
+!$OMP&                           PRIVATE( N, BSUM, M, S )
+
+                                DO N = 1, NOUTBINS
+
+                                    BSUM = 0.0D0
+                                    DO M = NBINS( N-1 )+1, NBINS( N )
+                                        S = ISRCB( M )
+                                        BSUM = BSUM + POLVAL ( S,J ) *
+     &                                                SMAT   ( S,K ) *
+     &                                                LFRAC1L( S )   *
+     &                                                PRMAT  ( S,KP) *
+     &                                                ACUMATX( S,KM)
+                                        IF( RPT_%SRCMAP ) THEN
+                                            CALL PARSCSRC( CSOURC( S ), MXCHRS, LOC_BEGP,
+     &                                                     LOC_ENDP, LF, NC, CHARS )
+                                            IF( FIRSTOUT ) THEN
+                                                WRITE( MDEV,94020 ) N, S, ( TRIM(CHARS(K)) ,K=1,NC-1 )
+                                            END IF
+                                        END IF
+
+                                    END DO
+
+                                    !!  .....  Add temporary bins values to output columns
+                                    BSUM = BSUM * BINPOPDIV( N )
+                                    IF ( IS .GT. 0 ) BINDATA( N,IS ) = BINDATA( N,IS ) + BSUM
+                                    IF ( IE .GT. 0 ) BINDATA( N,IE ) = BINDATA( N,IE ) + BSUM
+                                    IF ( IP .GT. 0 ) BINDATA( N,IP ) = BINDATA( N,IP ) + BSUM
+                                    IF ( SE .GT. 0 ) BINDATA( N,SE ) = BINDATA( N,SE ) + BSUM
+                                    IF ( SP .GT. 0 ) BINDATA( N,SP ) = BINDATA( N,SP ) + BSUM
+                                    IF ( SS .GT. 0 ) BINDATA( N,SS ) = BINDATA( N,SS ) + BSUM
+
                                 END DO
+                                FIRSTOUT = .FALSE.
 
-                            END IF
-
-C.............................  Add temporary bins values to output columns
-                            CALL UPDATE_OUTCOL( TOSOUT(V,RCNT)%SPC )
-                            CALL UPDATE_OUTCOL( TOSOUT(V,RCNT)%ETPSPC )
-                            CALL UPDATE_OUTCOL( TOSOUT(V,RCNT)%PRCSPC )
-                            CALL UPDATE_OUTCOL( TOSOUT(V,RCNT)%SUMETP )
-                            CALL UPDATE_OUTCOL( TOSOUT(V,RCNT)%SUMPOL )
-                            CALL UPDATE_OUTCOL( TOSOUT(V,RCNT)%SUMSPC )
+                            END IF      !  if usegmat, or not
 
                         END IF
 
@@ -400,45 +482,88 @@ C                       loop is over species (NV=NSVARS)
                     IF( TODOUT( E,RCNT )%AGG .GT. 0 .AND.
      &                ( SIDX( E ) .EQ. 0 .OR. SIDX( E ) .EQ. V ) )THEN
 
-C.........................  Flag data value as already having been added to
-C                           output
-                        SIDX( E ) = V
+C.........................  Flag data value as already having been added to output
 
-C.........................  Initialize temporary bin sum array
-                        BINARR = 0   ! array
+                        SIDX( E ) = V
+                        IE = TODOUT( E,RCNT )%ETP
+                        ID = TODOUT( E,RCNT )%DAT
+
+                        IF( RPT_%USEGMAT ) THEN
 
 C.........................  Sum gridded output records into temporary bins
 C..........................  Gridding factor has normalization by cell area
-                        IF( RPT_%USEGMAT ) THEN
-                            DO I = 1, NOUTREC
-                                S = OUTSRC( I )
-                                N = OUTBIN( I )
-                                BINARR( N ) = BINARR ( N ) + 
-     &                                        OUTGFAC( I )   *
-     &                                        POLVAL ( S,J ) *
-     &                                        LFRAC1L( S )   *
-     &                                        PRMAT  ( S,KP) *
-     &                                        ACUMATX( S,KM) *
-     &                                      BINPOPDIV( N )
+
+!$OMP                       PARALLEL DO
+!$OMP&                       DEFAULT( NONE ),
+!$OMP&                        SHARED( NOUTBINS, NBINS, ISRCB, GFACB,
+!$OMP&                                POLVAL, LFRAC1L, PRMAT, ACUMATX,
+!$OMP&                                BINDATA, BINPOPDIV, J, KP, KM, ID, IE ),
+!$OMP&                       PRIVATE( N, BSUM, M, S, F )
+
+                            DO N = 1, NOUTBINS
+                                BSUM = 0.0D0
+                                DO M = NBINS( N-1 )+1, NBINS( N )
+                                    S = ISRCB( M )
+                                    F = GFACB( M )
+                                    BSUM = BSUM + F * POLVAL ( S,J ) *
+     &                                                LFRAC1L( S )   *
+     &                                                PRMAT  ( S,KP) *
+     &                                                ACUMATX( S,KM)
+                                    IF( RPT_%SRCMAP ) THEN
+                                        CALL PARSCSRC( CSOURC( S ), MXCHRS, LOC_BEGP,
+     &                                                 LOC_ENDP, LF, NC, CHARS )
+                                        IF( FIRSTOUT ) THEN
+                                            WRITE( MDEV,94020 ) N, S, ( TRIM(CHARS(K)) ,K=1,NC-1 )
+                                        END IF
+                                    END IF
+                                END DO
+
+                                !!  .....  Add temporary bins values to output columns
+                                BSUM = BSUM * BINPOPDIV( N )
+                                IF ( ID .GT. 0 ) BINDATA( N,ID ) = BINDATA( N,ID ) + BSUM
+                                IF ( IE .GT. 0 ) BINDATA( N,IE ) = BINDATA( N,IE ) + BSUM
+
                             END DO
+                            FIRSTOUT = .FALSE.
+
+                        ELSE      !  else not usegmat
 
 C.........................  Sum non-gridded output records into temporary bins
-                        ELSE
-                            DO I = 1, NOUTREC
-                                S = OUTSRC( I )
-                                N = OUTBIN( I )
-                                BINARR( N ) = BINARR ( N ) + 
-     &                                        POLVAL ( S,J ) *
-     &                                        LFRAC1L( S )   *
-     &                                        PRMAT  ( S,KP) *
-     &                                        ACUMATX( S,KM) *
-     &                                      BINPOPDIV( N )
-                            END DO
-                        END IF
 
-C.........................  Add temporary bins values to output columns
-                        CALL UPDATE_OUTCOL( TODOUT( E,RCNT )%ETP )
-                        CALL UPDATE_OUTCOL( TODOUT( E,RCNT )%DAT )
+!$OMP                       PARALLEL DO
+!$OMP&                       DEFAULT( NONE ),
+!$OMP&                        SHARED( NOUTBINS, NBINS, ISRCB,
+!$OMP&                                POLVAL, LFRAC1L, PRMAT, ACUMATX,
+!$OMP&                                BINDATA, BINPOPDIV, J, KP, KM, ID, IE ),
+!$OMP&                       PRIVATE( N, BSUM, M, S )
+
+                            DO N = 1, NOUTBINS
+                                BSUM = 0.0D0
+                                DO M = NBINS( N-1 )+1, NBINS( N )
+                                    S = ISRCB( M )
+                                    BSUM = BSUM + POLVAL ( S,J ) *
+     &                                            LFRAC1L( S )   *
+     &                                            PRMAT  ( S,KP) *
+     &                                            ACUMATX( S,KM)
+                                    IF( RPT_%SRCMAP ) THEN
+                                        CALL PARSCSRC( CSOURC( S ), MXCHRS, LOC_BEGP,
+     &                                                 LOC_ENDP, LF, NC, CHARS )
+                                        IF( FIRSTOUT ) THEN
+                                            WRITE( MDEV,94020 ) N, S, ( TRIM(CHARS(K)) ,K=1,NC-1 )
+                                        END IF
+                                    END IF
+
+                                END DO
+
+                                !!  .....  Add temporary bins values to output columns
+                                BSUM = BSUM * BINPOPDIV( N )
+                                IF ( ID .GT. 0 ) BINDATA( N,ID ) = BINDATA( N,ID ) + BSUM
+                                IF ( IE .GT. 0 ) BINDATA( N,IE ) = BINDATA( N,IE ) + BSUM
+
+                            END DO
+                            FIRSTOUT = .FALSE.
+
+                        END IF      !  if usegmat, or not
 
                     END IF  ! End if current pollutant
 
@@ -452,7 +577,7 @@ C.....................  Convert units of output data
                         BINDATA( :,J ) = BINDATA( :,J ) * UCNVFAC( J )
 
 C.......................... Store tmp bindata for summing daily layered emission later
-                        IF( DLFLAG ) TMPBIN( L,T,:,J ) = BINDATA( :,J )
+                        IF( DLFLAG ) TMPBIN( :,J,L,T ) = BINDATA( :,J )
                     END DO
 
 C..................... Skip writing hourly emission when need daily total layered emissions
@@ -474,9 +599,10 @@ C.....................  Reinitialize sum array
 
 C.............  If error occured, end writing of report
             IF( EFLAG ) THEN
-                WRITE( MESG,94010 ) 'WARNING: Incomplete writing for '//
-     &                 'report', RCNT, 'because error(s) occurred.'
-                CALL M3MSG2( MESG )
+                WRITE( MESG,94010 )
+     &                 'WARNING: Incomplete writing for report', RCNT, 
+     &                 'because error(s) occurred.'
+                CALL M3WARN( PROGNAME, JDATE, JTIME, MESG )
                 RETURN
             END IF
 
@@ -497,7 +623,7 @@ C           Skipped hourly output at line 464 and sum hourly emissions for daily
                     DO J = 1, NDATA
 
                         BINDATA( :,J ) = BINDATA( :,J ) 
-     &                                   + TMPBIN( L,T,:,J )
+     &                                   + TMPBIN( :,J,L,T )
                     END DO
 
                 END DO
@@ -511,7 +637,7 @@ C.................  Write daily layered emission totals
 
 C.........  Deallocate routine-specific memory
         IF( DLFLAG ) DEALLOCATE( TMPBIN )
-        DEALLOCATE( POLVAL, LFRAC1L, BINARR )
+        DEALLOCATE( POLVAL, LFRAC1L, BINDATA )
 
         RETURN
 
@@ -526,29 +652,7 @@ C...........   Formatted file I/O formats............ 93xxx
 C...........   Internal buffering formats............ 94xxx
 
 94010   FORMAT( 10( A, :, I10, :, 1X ) )
-
-C******************  INTERNAL SUBPROGRAMS  *****************************
- 
-        CONTAINS
- 
-C.............  This internal function updates the output bin columns with
-C               the available array of data
-            SUBROUTINE UPDATE_OUTCOL( OUTCOL )
-
-C.............  Subprogram arguments
-            INTEGER, INTENT (IN) :: OUTCOL
-
-C----------------------------------------------------------------------
-
-            IF( OUTCOL .GT. 0 ) THEN
-
-                BINDATA( :,OUTCOL ) = BINDATA( :,OUTCOL ) + BINARR   ! array
-
-            END IF
-
-            RETURN
- 
-            END SUBROUTINE UPDATE_OUTCOL
+94020   FORMAT( 2I8, 7( 1X, A ) )
 
         END SUBROUTINE GENRPRT
 

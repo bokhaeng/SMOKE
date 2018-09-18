@@ -83,7 +83,7 @@ C...........   EXTERNAL FUNCTIONS
 C.........  LOCAL PARAMETERS and their descriptions:
 
         CHARACTER(50), PARAMETER :: 
-     &  CVSW = '$Name$' ! CVS release tag
+     &  CVSW = '$Name SMOKEv4.6_Sep2018$' ! CVS release tag
 
 C...........   LOCAL VARIABLES and their descriptions:
 
@@ -1164,8 +1164,6 @@ C.............  Write this time step to report
             CALL NEXTIME( JDATE, JTIME, TSTEP )
       
         END DO       ! loop through timesteps
-
-        WRITE( RDEV,93000 ) TRIM( RPTLINE )
 
 C........  Write summary of sector specific factor adjustment output
 C          Columns: Date, Sector, Species, value before, value after, ratio of before/after

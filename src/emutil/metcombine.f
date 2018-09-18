@@ -54,7 +54,7 @@ C...........   EXTERNAL FUNCTIONS and their descriptions:
 
 C.........  LOCAL PARAMETERS
         CHARACTER(50), PARAMETER :: 
-     &  CVSW = '$Name$'  ! CVS release tag
+     &  CVSW = '$Name SMOKEv4.6_Sep2018$'  ! CVS release tag
 
         INTEGER,      PARAMETER :: MAXVARS = 80        ! maximum number of variables
 

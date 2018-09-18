@@ -1,7 +1,6 @@
 
-        SUBROUTINE OPENTMPIN( UFLAG, PFLAG, ENAME, ANAME,
-     &                        DNAME, HNAME, GNAME, SDEV, XDEV, RDEV,
-     &                        CDEV, HDEV, KDEV, TDEV, MDEV, EDEV, PYEAR )
+        SUBROUTINE OPENTMPIN( UFLAG, PFLAG, ENAME, ANAME, DNAME, HNAME,
+     &                        SDEV, CDEV, HDEV, KDEV, PYEAR )
 
 C***********************************************************************
 C  subroutine body starts at line 123
@@ -40,7 +39,7 @@ C
 C smoke@unc.edu
 C
 C Pathname: $Source$
-C Last updated: $Date$
+C Last updated: $Date$ 
 C
 C***************************************************************************
 
@@ -67,9 +66,10 @@ C...........   EXTERNAL FUNCTIONS and their descriptions:
         INTEGER            INDEX1
         INTEGER            PROMPTFFILE
         CHARACTER(NAMLEN3) PROMPTMFILE
+        LOGICAL            USEEXPGEO
 
-        EXTERNAL        CRLF, ENVYN, GETIFDSC, GETCFDSC, INDEX1,
-     &                  PROMPTFFILE, PROMPTMFILE
+        EXTERNAL        CRLF, ENVYN, GETIFDSC, GETCFDSC, INDEX1, 
+     &                  PROMPTFFILE, PROMPTMFILE, USEEXPGEO
 
 C...........   SUBROUTINE ARGUMENTS
 
@@ -79,16 +79,10 @@ C...........   SUBROUTINE ARGUMENTS
         CHARACTER(*), INTENT(IN OUT) :: ANAME ! name for ASCII inven input
         CHARACTER(*), INTENT   (OUT) :: DNAME ! day-spec file
         CHARACTER(*), INTENT   (OUT) :: HNAME ! hour-spec file
-        CHARACTER(*), INTENT   (OUT) :: GNAME ! ungridding matrix
         INTEGER     , INTENT   (OUT) :: SDEV  ! unit no.: ASCII inven file
-        INTEGER     , INTENT   (OUT) :: XDEV  ! unit no.: x-ref file
-        INTEGER     , INTENT   (OUT) :: RDEV  ! unit no.: tmprl profile file
         INTEGER     , INTENT   (OUT) :: CDEV  ! unit no.: region codes file
         INTEGER     , INTENT   (OUT) :: HDEV  ! unit no.: holidays file
         INTEGER     , INTENT   (OUT) :: KDEV  ! unit no.: time periods file
-        INTEGER     , INTENT   (OUT) :: TDEV  ! unit no.: emissions process file
-        INTEGER     , INTENT   (OUT) :: MDEV  ! unit no.: mobile codes file
-        INTEGER     , INTENT   (OUT) :: EDEV  ! unit no.: emission factor file list
         INTEGER     , INTENT   (OUT) :: PYEAR ! projected year
 
 C...........   Other local variables
@@ -199,9 +193,11 @@ C.............  Store non-category-specific header information
         NSRC = NROWS3D
 
 C.........  Open region codes file for determining daylight savings time status
-        CDEV = PROMPTFFILE(
+        IF( .NOT. USEEXPGEO() ) THEN
+            CDEV = PROMPTFFILE(
      &             'Enter logical name for COUNTRY, STATE, AND ' //
      &             'COUNTY file', .TRUE., .TRUE., 'COSTCY', PROGNAME )
+        END IF
 
 C.........  Open holidays file for determining holidays by region
         HDEV = PROMPTFFILE(

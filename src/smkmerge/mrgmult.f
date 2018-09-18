@@ -54,11 +54,6 @@ C.........  This module contains the arrays for state and county summaries
 
         IMPLICIT NONE
 
-C...........   INCLUDES
-        INCLUDE 'PARMS3.EXT'    !  I/O API parameters
-        INCLUDE 'IODECL3.EXT'   !  I/O API function declarations
-        INCLUDE 'FDESC3.EXT'    !  I/O API file desc. data structures
-
 C.........  SUBROUTINE ARGUMENTS
         INTEGER     , INTENT (IN) :: NSRC        ! number of source
         INTEGER     , INTENT (IN) :: NG          ! (local) number of grid cells

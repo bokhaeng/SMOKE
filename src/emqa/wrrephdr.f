@@ -42,7 +42,8 @@ C***********************************************************************
 
 C.........  MODULES for public variables
 C...........   This module is the inventory arrays
-        USE MODSOURC, ONLY: STKHT, STKDM, STKTK, STKVE, CPDESC
+        USE MODSOURC, ONLY: STKHT, STKDM, STKTK, STKVE, CPDESC, FUGHGT,
+     &                      FUGWID, FUGLEN, FUGANG
 
 C.........  This module contains the lists of unique source characteristics
         USE MODLISTS, ONLY: NINVSCC, SCCDESC, SCCDLEV, NINVSIC, SICDESC,
@@ -63,12 +64,14 @@ C.........  This module contains Smkreport-specific settings
      &                      SPCWIDTH, ELEVWIDTH, SDSCWIDTH, UNITWIDTH,
      &                      MINC, LENELV3, SDATE, STIME, EDATE, ETIME,
      &                      PYEAR, PRBYR, PRPYR, OUTUNIT, TITLES,
-     &                      ALLRPT, LOC_BEGP, LOC_ENDP, SICFMT,
+     &                      ALLRPT, LOC_BEGP, LOC_ENDP,
      &                      SICWIDTH, SIDSWIDTH, MACTWIDTH, MACDSWIDTH,
-     &                      NAIWIDTH, NAIDSWIDTH, STYPWIDTH,
+     &                      NAIWIDTH, NAIDSWIDTH, STYPWIDTH, UNITWIDTH,
      &                      LTLNFMT, LTLNWIDTH, LABELWIDTH, DLFLAG,
      &                      NFDFLAG, MATFLAG, ORSWIDTH, ORSDSWIDTH,
-     &                      STKGWIDTH, STKGFMT, INTGRWIDTH
+     &                      STKGWIDTH, STKGFMT, INTGRWIDTH, GEO1WIDTH,
+     &                      ERTYPWIDTH, FUGPFMT, FUGPWIDTH, LAMBWIDTH,
+     &                      LAMBFMT, LLGRDFMT, LLGRDWIDTH
 
 C.........  This module contains report arrays for each output bin
         USE MODREPBN, ONLY: NOUTBINS, BINX, BINY, BINSMKID, BINREGN,
@@ -79,11 +82,13 @@ C.........  This module contains report arrays for each output bin
      &                      BINCYIDX, BINSTIDX, BINCOIDX, BINSPCID,
      &                      BINPLANT, BINSIC, BINSICIDX, BINMACT, 
      &                      BINMACIDX, BINNAICS, BINNAIIDX, BINSRCTYP,
-     &                      BINORIS, BINORSIDX, BINSTKGRP, BININTGR
+     &                      BINORIS, BINORSIDX, BINSTKGRP, BININTGR,
+     &                      BINGEO1IDX, BINERPTYP
 
 C.........  This module contains the arrays for state and county summaries
         USE MODSTCY, ONLY: NCOUNTRY, NSTATE, NCOUNTY, STCYPOPYR,
-     &                     CTRYNAM, STATNAM, CNTYNAM, ORISDSC, NORIS
+     &                     CTRYNAM, STATNAM, CNTYNAM, ORISDSC, NORIS,
+     &                     NGEOLEV1, GEOLEV1NAM
 
 C.........  This module contains the global variables for the 3-d grid
         USE MODGRID, ONLY: GRDNM
@@ -102,8 +107,9 @@ C...........  EXTERNAL FUNCTIONS and their descriptions:
         INTEGER         STR2INT
         CHARACTER(14)   MMDDYY
         INTEGER         WKDAY
+        LOGICAL         USEEXPGEO
 
-        EXTERNAL   CRLF, STR2INT, MMDDYY, WKDAY
+        EXTERNAL   CRLF, STR2INT, MMDDYY, WKDAY, USEEXPGEO
 
 C...........   SUBROUTINE ARGUMENTS
         INTEGER     , INTENT (IN) :: FDEV       ! output file unit number
@@ -166,7 +172,31 @@ C...........   Local parameters
         INTEGER, PARAMETER :: IHDRORIS = 49
         INTEGER, PARAMETER :: IHDRORNM = 50
         INTEGER, PARAMETER :: IHDRINTGR= 51
-        INTEGER, PARAMETER :: NHEADER  = 51
+        INTEGER, PARAMETER :: IHDRGEO1 = 52
+        INTEGER, PARAMETER :: IHDRGEO2 = 53
+        INTEGER, PARAMETER :: IHDRGEO3 = 54
+        INTEGER, PARAMETER :: IHDRGEO4 = 55
+        INTEGER, PARAMETER :: IHDRCARB = 56
+        INTEGER, PARAMETER :: IHDRCADT = 57
+        INTEGER, PARAMETER :: IHDRERTYP= 58
+        INTEGER, PARAMETER :: IHDRFUGHT= 59
+        INTEGER, PARAMETER :: IHDRFUGWD= 60
+        INTEGER, PARAMETER :: IHDRFUGLN= 61
+        INTEGER, PARAMETER :: IHDRFUGAN= 62
+        INTEGER, PARAMETER :: IHDRLAMBX= 63
+        INTEGER, PARAMETER :: IHDRLAMBY= 64
+        INTEGER, PARAMETER :: IHDRUTMX = 65
+        INTEGER, PARAMETER :: IHDRUTMY = 66
+        INTEGER, PARAMETER :: IHDRUTMZ = 67
+        INTEGER, PARAMETER :: IHDRSWLAT= 68
+        INTEGER, PARAMETER :: IHDRSWLON= 69
+        INTEGER, PARAMETER :: IHDRNWLAT= 70
+        INTEGER, PARAMETER :: IHDRNWLON= 71
+        INTEGER, PARAMETER :: IHDRNELAT= 72
+        INTEGER, PARAMETER :: IHDRNELON= 73
+        INTEGER, PARAMETER :: IHDRSELAT= 74
+        INTEGER, PARAMETER :: IHDRSELON= 75
+        INTEGER, PARAMETER :: NHEADER  = 75
 
         CHARACTER(12), PARAMETER :: MISSNAME = 'Missing Name'
 
@@ -189,7 +219,7 @@ C...........   Local parameters
      &                              'Primary Srg      ',
      &                              'Fallbk Srg       ',
      &                              'Monthly Prf      ',
-     &                              'Weekly Prf       ',
+     &                              'Weekly  Prf      ',
      &                              'Day-Month Prf    ',
      &                              'Mon Diu Prf      ',
      &                              'Tue Diu Prf      ',
@@ -221,9 +251,34 @@ C...........   Local parameters
      &                              'MATBURNED        ',
      &                              'ORIS             ',
      &                              'ORIS Description ',
-     &                              'INT_STAT         ' / )
+     &                              'INT_STAT         ',
+     &                              'Geo Regn Level 1 ',
+     &                              'Geo Regn Level 2 ',
+     &                              'Geo Regn Level 3 ',
+     &                              'Geo Regn Level 4 ',
+     &                              'T,Yr,Mon,Jday,Dow',
+     &                              'Basin,Dist,Cnty  ',
+     &                              'Emis Release Type',
+     &                              'Fug Ht           ',
+     &                              'Fug Wdt          ',
+     &                              'Fug Len          ',
+     &                              'Fug Ang          ',
+     &                              'Lambert-X        ',
+     &                              'Lambert-Y        ',
+     &                              'UTM_X            ',
+     &                              'UTM_Y            ',
+     &                              'UTM Zone         ',
+     &                              'SW Latitude      ',
+     &                              'SW Longitude     ',
+     &                              'NW Latitude      ',
+     &                              'NW Longitude     ',
+     &                              'NE Latitude      ',
+     &                              'NE Longitude     ',
+     &                              'SE Latitude      ',
+     &                              'SE Longitude     ' / )
 
 C...........   Local variables that depend on module variables
+        LOGICAL    LGEO1USE ( NGEOLEV1 )
         LOGICAL    LCTRYUSE ( NCOUNTRY )
         LOGICAL    LSTATUSE ( NSTATE )
         LOGICAL    LCNTYUSE ( NCOUNTY )
@@ -236,11 +291,12 @@ C...........   Local variables that depend on module variables
         CHARACTER(10) CHRHDRS( NCHARS )  ! Source characteristics headers
 
 C...........   Other local arrays
-        INTEGER       PWIDTH( 4 )
+        INTEGER       PWIDTH( 8 )
 
 C...........   Other local variables
         INTEGER     I, J, K, K1, K2, L, L1, L2, S, V, IOS
 
+        INTEGER     IHDRIDX         ! tmp header index
         INTEGER     LN              ! length of single units entry
         INTEGER     LU              ! cumulative width of units header
         INTEGER     LV              ! width of delimiter
@@ -256,6 +312,7 @@ C...........   Other local variables
         REAL        VAL             ! tmp data value
         REAL        PREVAL          ! tmp previous data value
 
+        LOGICAL  :: GEO1MISS              ! true: missing geo level 1 name
         LOGICAL  :: CNRYMISS              ! true: >=1 missing country name
         LOGICAL  :: CNTYMISS              ! true: >=1 missing county name
         LOGICAL  :: DATFLOAT              ! true: use float output format
@@ -287,6 +344,7 @@ C.........  Initialize output subroutine arguments
         OUTFMT = ' '
 
 C.........  Initialize local variables for current report
+        GEO1MISS = .FALSE.
         CNRYMISS = .FALSE.
         STATMISS = .FALSE.
         CNTYMISS = .FALSE.
@@ -296,6 +354,7 @@ C.........  Initialize local variables for current report
         NAICSMISS= .FALSE.
         ORISMISS = .FALSE.
 
+        LGEO1USE = .FALSE.    ! array
         LCTRYUSE = .FALSE.    ! array
         LSTATUSE = .FALSE.    ! array
         LCNTYUSE = .FALSE.    ! array
@@ -322,7 +381,8 @@ C.........  Initialize local variables for current report
 C.........  Initialize report-specific settings
         RPT_ = ALLRPT( RCNT )  ! many-values
 
-        LREGION = ( RPT_%BYCNRY .OR. RPT_%BYSTAT .OR. RPT_%BYCNTY )
+        LREGION = ( RPT_%BYGEO1 .OR. RPT_%BYCNRY .OR. 
+     &              RPT_%BYSTAT .OR. RPT_%BYCNTY )
 
 C.........  Define source-category specific header
 C.........  NOTE that (1) will not be used and none will be for area sources
@@ -361,6 +421,13 @@ C           which ones are being used by the selected sources.
 C............................................................................
         PDSCWIDTH = 1
         DO I = 1, NOUTBINS
+
+C.............  Include geo code level 1 name in string
+            IF( RPT_%BYGEO1NAM ) THEN
+                J = BINGEO1IDX( I )
+                IF( J .GT. 0 ) LGEO1USE( J ) = .TRUE.
+                IF( J .LE. 0 ) GEO1MISS = .TRUE.
+            END IF
 
 C.............  Include country name in string
             IF( RPT_%BYCONAM ) THEN
@@ -406,6 +473,32 @@ C.............  Include stack parameters
                 WRITE( BUFFER, '(F30.0)' ) STKVE( S )
                 BUFFER = ADJUSTL( BUFFER )
                 PWIDTH( 4 ) = MAX( PWIDTH( 4 ), LEN_TRIM( BUFFER ) )
+
+            END IF
+
+C.............  Include fugitive parameters
+            IF( RPT_%FUGPARM ) THEN
+                S = BINSMKID( I )
+
+                BUFFER = ' '
+                WRITE( BUFFER, '(F30.0)' ) FUGHGT( S )
+                BUFFER = ADJUSTL( BUFFER )
+                PWIDTH( 5 ) = MAX( PWIDTH( 5 ), LEN_TRIM( BUFFER ) )
+
+                BUFFER = ' '
+                WRITE( BUFFER, '(F30.0)' ) FUGWID( S )
+                BUFFER = ADJUSTL( BUFFER )
+                PWIDTH( 6 ) = MAX( PWIDTH( 6 ), LEN_TRIM( BUFFER ) )
+
+                BUFFER = ' '
+                WRITE( BUFFER, '(F30.0)' ) FUGLEN( S )
+                BUFFER = ADJUSTL( BUFFER )
+                PWIDTH( 7 ) = MAX( PWIDTH( 7 ), LEN_TRIM( BUFFER ) )
+
+                BUFFER = ' '
+                WRITE( BUFFER, '(F30.0)' ) FUGANG( S )
+                BUFFER = ADJUSTL( BUFFER )
+                PWIDTH( 8 ) = MAX( PWIDTH( 8 ), LEN_TRIM( BUFFER ) )
 
             END IF
 
@@ -457,22 +550,6 @@ C............................................................................
 C.........  The extra length for each variable is 1 space and 1 delimiter width
         LV = LEN_TRIM( RPT_%DELIM ) + 1
 
-C.........  Variable column
-        IF( RPT_%RPTMODE .EQ. 3 ) THEN
-            NWIDTH = 0
-            DO I = 1, RPT_%NUMDATA
-                NWIDTH = MAX( NWIDTH, LEN_TRIM( OUTDNAM( I, RCNT ) ) )
-            END DO
-
-            J = LEN_TRIM( HEADERS( IHDRVAR ) )
-            J = MAX( NWIDTH, J )
-
-            CALL ADD_TO_HEADER( J, HEADERS(IHDRVAR), LH, HDRBUF )
-
-            VARWIDTH = J + LV
-
-        END IF
-
 C.........  User-defined label
         IF( RPT_%USELABEL ) THEN
             J = MAX( LEN_TRIM( RPT_%LABEL ), 
@@ -485,7 +562,18 @@ C.........  User-defined label
         END IF
 
 C.........  Date column
-        IF( RPT_%BYDATE ) THEN
+        IF( RPT_%CARB ) THEN
+            J = 17  ! header width is AGTYPE,YEAR,MM,JDAY,DOW
+            WRITE( DATEFMT, 94220 ) RPT_%DELIM  ! leading zeros
+            DATEWIDTH = J + LV
+
+            CALL ADD_TO_HEADER( J, HEADERS(IHDRCARB), LH, HDRBUF )
+            CALL ADD_TO_HEADER( J, ' ', LU, UNTBUF )
+
+        END IF
+
+C.........  Date column
+        IF( RPT_%BYDATE .AND. .NOT. RPT_%CARB ) THEN
             J = 10  ! header width is MM/DD/YYYY
             WRITE( DATEFMT, 94620 ) RPT_%DELIM  ! leading zeros
             DATEWIDTH = J + LV
@@ -497,6 +585,17 @@ C.........  Date column
 
 C.........  Hour column
         IF( RPT_%BYHOUR ) THEN
+            IF( .NOT. DLFLAG ) THEN
+                J = LEN_TRIM( HEADERS( IHDRHOUR ) )  ! header width
+                WRITE( HOURFMT, 94630 ) J, 2, RPT_%DELIM  ! leading zeros
+                J = MAX( 2, J )
+                HOURWIDTH = J + LV
+
+                CALL ADD_TO_HEADER( J, HEADERS(IHDRHOUR), LH, HDRBUF )
+                CALL ADD_TO_HEADER( J, ' ', LU, UNTBUF )
+
+            END IF
+        ELSE IF( .NOT. RPT_%BYHOUR .AND. RPT_%CARB ) THEN
             IF( .NOT. DLFLAG ) THEN
                 J = LEN_TRIM( HEADERS( IHDRHOUR ) )  ! header width
                 WRITE( HOURFMT, 94630 ) J, 2, RPT_%DELIM  ! leading zeros
@@ -542,6 +641,25 @@ C.............  Y-cell
 C.............  Write format to include both x-cell and y-cell
             WRITE( CELLFMT, 94635 ) W1, RPT_%DELIM, W2, RPT_%DELIM
             CELLWIDTH = W1 + W2 + 2*LV
+
+        ELSE IF( .NOT. RPT_%BYCELL .AND. RPT_%CARB ) THEN
+
+C.............  X-cell
+            J = LEN_TRIM( HEADERS( IHDRCOL ) )
+            W1 = J
+            CALL ADD_TO_HEADER( W1, HEADERS(IHDRCOL), LH, HDRBUF )
+            CALL ADD_TO_HEADER( W1, ' ', LU, UNTBUF )
+
+C.............  Y-cell
+            J = LEN_TRIM( HEADERS( IHDRROW ) )
+            W2 = J
+            CALL ADD_TO_HEADER( W2, HEADERS(IHDRROW), LH, HDRBUF )
+            CALL ADD_TO_HEADER( W2, ' ', LU, UNTBUF )
+
+C.............  Write format to include both x-cell and y-cell
+            WRITE( CELLFMT, 94635 ) W1, RPT_%DELIM, W2, RPT_%DELIM
+            CELLWIDTH = W1 + W2 + 2*LV
+
         END IF
 
 C.........  Source ID column
@@ -561,21 +679,68 @@ C.........  Source ID column
 
 C.........  Region code column
         IF( LREGION ) THEN
-            J  = LEN_TRIM( HEADERS( IHDRREGN ) )
-            W1 = INTEGER_COL_WIDTH( NOUTBINS, BINREGN )
+            IF( RPT_%CARB ) THEN
+                J  = LEN_TRIM( HEADERS( IHDRCADT ) )
+            ELSE
+                J  = LEN_TRIM( HEADERS( IHDRREGN ) )
+            ENDIF
+            W1 = 0
+            DO I = 1, NOUTBINS
+                W1 = MAX( W1, LEN_TRIM( BINREGN( I ) ) )
+            END DO
             W1  = MAX( W1, J )
 
-            CALL ADD_TO_HEADER( W1, HEADERS(IHDRREGN), LH, HDRBUF)
+            IF( RPT_%CARB ) THEN
+                CALL ADD_TO_HEADER( W1, HEADERS(IHDRCADT), LH, HDRBUF)
+            ELSE
+                CALL ADD_TO_HEADER( W1, HEADERS(IHDRREGN), LH, HDRBUF)
+            ENDIF
             CALL ADD_TO_HEADER( W1, ' ', LU, UNTBUF )
 
             WRITE( REGNFMT, 94630 ) W1, FIPLEN3, RPT_%DELIM     ! leading zeros
             REGNWIDTH = W1 + LV
+
+        ELSE IF( .NOT. LREGION .AND. RPT_%CARB ) THEN
+            J  = LEN_TRIM( HEADERS( IHDRCADT ) )
+            W1 = J
+
+            CALL ADD_TO_HEADER( W1, HEADERS(IHDRCADT), LH, HDRBUF)
+            CALL ADD_TO_HEADER( W1, ' ', LU, UNTBUF )
+
+            WRITE( REGNFMT, 94630 ) W1, FIPLEN3, RPT_%DELIM     ! leading zeros
+            REGNWIDTH = W1 + LV
+
         END IF
 
 C.........  Set widths and build formats for country, state, and county names.
 C           These are done on loops of unique lists of these names
 C           so that the LEN_TRIMs can be done on the shortest possible list
 C           of entries instead of on all entries in the bins list.
+
+C.........  Geo code level 1 names
+        IF( RPT_%BYGEO1NAM ) THEN
+
+C.............  For regions in the inventory, get max name width
+            NWIDTH = 0
+            DO I = 1, NGEOLEV1
+                IF( LGEO1USE( I ) ) THEN
+                    NWIDTH = MAX( NWIDTH, LEN_TRIM( GEOLEV1NAM( I ) ) )
+                END IF
+            END DO
+
+C.............  If any missing region names, check widths
+            IF( GEO1MISS ) NWIDTH = MAX( NWIDTH, LEN_TRIM( MISSNAME ) )
+
+C.............  Set geo code name column width 
+            J = LEN_TRIM( HEADERS( IHDRGEO1 ) )
+            J = MAX( NWIDTH, J )
+
+            CALL ADD_TO_HEADER( J, HEADERS(IHDRGEO1), LH, HDRBUF )
+            CALL ADD_TO_HEADER( J, ' ', LU, UNTBUF )
+
+            GEO1WIDTH = J + LV
+
+        END IF
 
 C.........  Country names
         IF( RPT_%BYCONAM ) THEN
@@ -592,10 +757,12 @@ C.............  If any missing country names, check widths
             IF( CNRYMISS ) NWIDTH = MAX( NWIDTH, LEN_TRIM( MISSNAME ) )
 
 C.............  Set country name column width 
-            J = LEN_TRIM( HEADERS( IHDRCNRY ) )
+            IHDRIDX = IHDRCNRY
+            IF( USEEXPGEO() ) IHDRIDX = IHDRGEO2
+            J = LEN_TRIM( HEADERS( IHDRIDX ) )
             J = MAX( NWIDTH, J )
 
-            CALL ADD_TO_HEADER( J, HEADERS(IHDRCNRY), LH, HDRBUF )
+            CALL ADD_TO_HEADER( J, HEADERS(IHDRIDX), LH, HDRBUF )
             CALL ADD_TO_HEADER( J, ' ', LU, UNTBUF )
 
             COWIDTH = J + LV
@@ -616,11 +783,13 @@ C.............  For states in the inventory, get max name width
 C.............  If any missing state names, check widths
             IF( STATMISS ) NWIDTH = MAX( NWIDTH, LEN_TRIM( MISSNAME ) )
 
-C.............  Set country name column width 
-            J = LEN_TRIM( HEADERS( IHDRSTAT ) )
+C.............  Set state name column width 
+            IHDRIDX = IHDRSTAT
+            IF( USEEXPGEO() ) IHDRIDX = IHDRGEO3
+            J = LEN_TRIM( HEADERS( IHDRIDX ) )
             J = MAX( NWIDTH, J )
 
-            CALL ADD_TO_HEADER( J, HEADERS(IHDRSTAT), LH, HDRBUF )
+            CALL ADD_TO_HEADER( J, HEADERS(IHDRIDX), LH, HDRBUF )
             CALL ADD_TO_HEADER( J, ' ', LU, UNTBUF )
 
             STWIDTH = J + LV
@@ -630,7 +799,7 @@ C.............  Set country name column width
 C.........  County names
         IF( RPT_%BYCYNAM ) THEN
 
-C.............  For countries in the inventory, get max name width
+C.............  For counties in the inventory, get max name width
             NWIDTH = 0
             DO I = 1, NCOUNTY
                 IF( LCNTYUSE( I ) ) THEN
@@ -638,14 +807,16 @@ C.............  For countries in the inventory, get max name width
                 END IF
             END DO
 
-C.............  If any missing country names, check widths
+C.............  If any missing county names, check widths
             IF( CNTYMISS ) NWIDTH = MAX( NWIDTH, LEN_TRIM( MISSNAME ) )
 
-C.............  Set country name column width 
-            J = LEN_TRIM( HEADERS( IHDRCNTY ) )
+C.............  Set county name column width 
+            IHDRIDX = IHDRCNTY
+            IF( USEEXPGEO() ) IHDRIDX = IHDRGEO4
+            J = LEN_TRIM( HEADERS( IHDRIDX ) )
             J = MAX( NWIDTH, J )
 
-            CALL ADD_TO_HEADER( J, HEADERS(IHDRCNTY), LH, HDRBUF )
+            CALL ADD_TO_HEADER( J, HEADERS(IHDRIDX), LH, HDRBUF )
             CALL ADD_TO_HEADER( J, ' ', LU, UNTBUF )
 
             CYWIDTH = J + LV
@@ -655,10 +826,10 @@ C.............  Set country name column width
 C.........  SCC column
         IF( RPT_%BYSCC ) THEN
             J = LEN_TRIM( HEADERS( IHDRSCC ) )
-            IF( RPT_%SCCRES < NSCCLV3 ) J = J + 7  ! Plus " Tier #"
+            IF( RPT_%SCCRES < NSCCLV3-1 ) J = J + 7  ! Plus " Tier #"
             J = MAX( SCCLEN3, J )
    
-            IF( RPT_%SCCRES < NSCCLV3 ) THEN
+            IF( RPT_%SCCRES < NSCCLV3-1 ) THEN
                 WRITE( BUFFER, '(A,I1)' ) TRIM( HEADERS(IHDRSCC) ) // 
      &                                    ' Tier ', RPT_%SCCRES
             ELSE
@@ -675,22 +846,20 @@ C.........  SIC column
         IF( RPT_%BYSIC ) THEN
             IF( MATFLAG ) THEN
                 J = LEN_TRIM( HEADERS( IHDRMATBN ) )
-                W1 = INTEGER_COL_WIDTH( NOUTBINS, BINSIC )
-                W1 = MAX( W1, J )  
-                CALL ADD_TO_HEADER( W1, HEADERS(IHDRMATBN), LH, HDRBUF )
-                CALL ADD_TO_HEADER( W1, ' ', LU, UNTBUF )
+                J = MAX( SICLEN3, J )
+                
+                CALL ADD_TO_HEADER( J, HEADERS(IHDRMATBN), LH, HDRBUF )
+                CALL ADD_TO_HEADER( J, ' ', LU, UNTBUF )
 
-                WRITE( SICFMT, 94650 ) W1, RPT_%DELIM
-                SICWIDTH = W1 + LV
+                SICWIDTH = J + LV
             ELSE
                 J = LEN_TRIM( HEADERS( IHDRSIC ) )
-                W1 = INTEGER_COL_WIDTH( NOUTBINS, BINSIC )
-                W1 = MAX( W1, J )  
-                CALL ADD_TO_HEADER( W1, HEADERS(IHDRSIC), LH, HDRBUF )
-                CALL ADD_TO_HEADER( W1, ' ', LU, UNTBUF )
+                J = MAX( SICLEN3, J )
+                
+                CALL ADD_TO_HEADER( J, HEADERS(IHDRSIC), LH, HDRBUF )
+                CALL ADD_TO_HEADER( J, ' ', LU, UNTBUF )
 
-                WRITE( SICFMT, 94650 ) W1, RPT_%DELIM
-                SICWIDTH = W1 + LV
+                SICWIDTH = J + LV
             END IF
         END IF
 
@@ -1080,35 +1249,71 @@ C.........  Stack parameters.  +3 for decimal and 2 significant figures
         IF( RPT_%STKPARM ) THEN
 
             J = LEN_TRIM( HEADERS( IHDRHT ) )
-            PWIDTH( 1 ) = MAX( PWIDTH( 1 ) + 3, J )
+            PWIDTH( 1 ) = 10
             CALL ADD_TO_HEADER( PWIDTH( 1 ), HEADERS( IHDRHT ), 
      &                          LH, HDRBUF )
-            CALL ADD_TO_HEADER( PWIDTH( 1 ), ATTRUNIT( 8 ), LU, UNTBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 1 ), ATTRUNIT( 6 ), LU, UNTBUF )
 
             J = LEN_TRIM( HEADERS( IHDRDM ) )
-            PWIDTH( 2 ) = MAX( PWIDTH( 2 ) + 3, J )
+            PWIDTH( 2 ) = 10
             CALL ADD_TO_HEADER( PWIDTH( 2 ), HEADERS( IHDRDM ), 
      &                          LH, HDRBUF )
-            CALL ADD_TO_HEADER( PWIDTH( 2 ), ATTRUNIT( 9 ), LU, UNTBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 2 ), ATTRUNIT( 7 ), LU, UNTBUF )
 
             J = LEN_TRIM( HEADERS( IHDRTK ) )
-            PWIDTH( 3 ) = MAX( PWIDTH( 3 ) + 3, J )
+            PWIDTH( 3 ) = 10
             CALL ADD_TO_HEADER( PWIDTH( 3 ), HEADERS( IHDRTK ), 
      &                          LH, HDRBUF )
-            CALL ADD_TO_HEADER( PWIDTH( 3 ), ATTRUNIT(10), LU, UNTBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 3 ), ATTRUNIT( 8 ), LU, UNTBUF )
 
             J = LEN_TRIM( HEADERS( IHDRVE ) )
-            PWIDTH( 4 ) = MAX( PWIDTH( 4 ) + 3, J )
+            PWIDTH( 4 ) = 10
             CALL ADD_TO_HEADER( PWIDTH( 4 ), HEADERS( IHDRVE ), 
      &                          LH, HDRBUF )
-            CALL ADD_TO_HEADER( PWIDTH( 4 ), ATTRUNIT(11), LU, UNTBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 4 ), ATTRUNIT( 9 ), LU, UNTBUF )
 
             WRITE( STKPFMT, 94640 ) PWIDTH( 1 ), RPT_%DELIM,
      &                              PWIDTH( 2 ), RPT_%DELIM,
      &                              PWIDTH( 3 ), RPT_%DELIM,
      &                              PWIDTH( 4 ), RPT_%DELIM
 
-            STKPWIDTH = SUM( PWIDTH ) + 4*LV
+            STKPWIDTH = SUM( PWIDTH( 1:4 ) ) + 4*LV
+
+        END IF
+
+C.........  Fugitive parameters.  +3 for decimal and 2 significant figures
+        IF( RPT_%FUGPARM ) THEN
+
+            J = LEN_TRIM( HEADERS( IHDRFUGHT ) )
+            PWIDTH( 5 ) = 10 
+            CALL ADD_TO_HEADER( PWIDTH( 5 ), HEADERS( IHDRFUGHT ),
+     &                          LH, HDRBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 5 ), ATTRUNIT( 6 ), LU, UNTBUF )
+
+            J = LEN_TRIM( HEADERS( IHDRFUGWD ) )
+            PWIDTH( 6 ) = 10 
+            CALL ADD_TO_HEADER( PWIDTH( 6 ), HEADERS( IHDRFUGWD ),
+     &                          LH, HDRBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 6 ), ATTRUNIT( 7 ), LU, UNTBUF )
+
+            J = LEN_TRIM( HEADERS( IHDRFUGLN ) )
+            PWIDTH( 7 ) = 10
+            CALL ADD_TO_HEADER( PWIDTH( 7 ), HEADERS( IHDRFUGLN ),
+     &                          LH, HDRBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 7 ), ATTRUNIT( 8 ), LU, UNTBUF )
+
+            J = LEN_TRIM( HEADERS( IHDRFUGAN ) )
+            PWIDTH( 8 ) = 10
+            CALL ADD_TO_HEADER( PWIDTH( 8 ), HEADERS( IHDRFUGAN ),
+     &                          LH, HDRBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 8 ), ATTRUNIT( 9 ), LU, UNTBUF )
+
+            WRITE( FUGPFMT, 94640 ) PWIDTH( 5 ), RPT_%DELIM,
+     &                              PWIDTH( 6 ), RPT_%DELIM,
+     &                              PWIDTH( 7 ), RPT_%DELIM,
+     &                              PWIDTH( 8 ), RPT_%DELIM
+
+            FUGPWIDTH = SUM( PWIDTH( 5:8 ) ) + 4*LV
 
         END IF
 
@@ -1134,6 +1339,113 @@ C.........  Point-source latitude and longitude
             
         END IF
 
+C.........  Point-source grid lamber-x&y, and grid utm_x,y,zone 
+        IF( RPT_%GRDCOR ) THEN
+
+            J = LEN_TRIM( HEADERS( IHDRLAMBX ) )
+            PWIDTH( 1 ) = 13
+            CALL ADD_TO_HEADER( PWIDTH( 1 ), HEADERS( IHDRLAMBX ),
+     &                          LH, HDRBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 1 ), '    ', LU, UNTBUF )
+
+            J = LEN_TRIM( HEADERS( IHDRLAMBY ) )
+            PWIDTH( 2 ) = 13
+            CALL ADD_TO_HEADER( PWIDTH( 2 ), HEADERS( IHDRLAMBY ),
+     &                          LH, HDRBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 2 ), '     ', LU, UNTBUF )
+
+            J = LEN_TRIM( HEADERS( IHDRUTMX ) )
+            PWIDTH( 3 ) = 13
+            CALL ADD_TO_HEADER( PWIDTH( 3 ), HEADERS( IHDRUTMX ),
+     &                          LH, HDRBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 3 ), '    ', LU, UNTBUF )
+
+            J = LEN_TRIM( HEADERS( IHDRUTMY ) )
+            PWIDTH( 4 ) = 13
+            CALL ADD_TO_HEADER( PWIDTH( 4 ), HEADERS( IHDRUTMY ),
+     &                          LH, HDRBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 4 ), '     ', LU, UNTBUF )
+
+            J = LEN_TRIM( HEADERS( IHDRUTMZ ) )
+            PWIDTH( 5 ) = 13
+            CALL ADD_TO_HEADER( PWIDTH( 5 ), HEADERS( IHDRUTMZ ),
+     &                          LH, HDRBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 5 ), '     ', LU, UNTBUF )
+
+            WRITE( LAMBFMT, 94643 ) PWIDTH( 1 ), RPT_%DELIM,
+     &                              PWIDTH( 2 ), RPT_%DELIM,
+     &                              PWIDTH( 3 ), RPT_%DELIM,
+     &                              PWIDTH( 4 ), RPT_%DELIM,
+     &                              PWIDTH( 5 ), RPT_%DELIM
+
+            LAMBWIDTH = SUM( PWIDTH( 1:5 ) ) + 5*LV
+
+        END IF
+
+C.........  Grid cell corner coordinates
+        IF( RPT_%GRDPNT ) THEN
+        
+            J = LEN_TRIM( HEADERS( IHDRSWLAT ) )
+            PWIDTH( 1 ) = 13
+            CALL ADD_TO_HEADER( PWIDTH( 1 ), HEADERS( IHDRSWLAT ),
+     &                          LH, HDRBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 1 ), '    ', LU, UNTBUF )
+        
+            J = LEN_TRIM( HEADERS( IHDRSWLON ) )
+            PWIDTH( 2 ) = 13
+            CALL ADD_TO_HEADER( PWIDTH( 2 ), HEADERS( IHDRSWLON ),
+     &                          LH, HDRBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 2 ), '    ', LU, UNTBUF )
+        
+            J = LEN_TRIM( HEADERS( IHDRNWLAT ) )
+            PWIDTH( 3 ) = 13
+            CALL ADD_TO_HEADER( PWIDTH( 3 ), HEADERS( IHDRNWLAT ),
+     &                          LH, HDRBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 3 ), '    ', LU, UNTBUF )
+        
+            J = LEN_TRIM( HEADERS( IHDRNWLON ) )
+            PWIDTH( 4 ) = 13
+            CALL ADD_TO_HEADER( PWIDTH( 4 ), HEADERS( IHDRNWLON ),
+     &                          LH, HDRBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 4 ), '    ', LU, UNTBUF )
+        
+            J = LEN_TRIM( HEADERS( IHDRNELAT ) )
+            PWIDTH( 5 ) = 13
+            CALL ADD_TO_HEADER( PWIDTH( 5 ), HEADERS( IHDRNELAT ),
+     &                          LH, HDRBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 5 ), '    ', LU, UNTBUF )
+        
+            J = LEN_TRIM( HEADERS( IHDRNELON ) )
+            PWIDTH( 6 ) = 13
+            CALL ADD_TO_HEADER( PWIDTH( 6 ), HEADERS( IHDRNELON ),
+     &                          LH, HDRBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 6 ), '    ', LU, UNTBUF )
+        
+            J = LEN_TRIM( HEADERS( IHDRSELAT ) )
+            PWIDTH( 7 ) = 13
+            CALL ADD_TO_HEADER( PWIDTH( 7 ), HEADERS( IHDRSELAT ),
+     &                          LH, HDRBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 7 ), '    ', LU, UNTBUF )
+        
+            J = LEN_TRIM( HEADERS( IHDRSELON ) )
+            PWIDTH( 8 ) = 13
+            CALL ADD_TO_HEADER( PWIDTH( 8 ), HEADERS( IHDRSELON ),
+     &                          LH, HDRBUF )
+            CALL ADD_TO_HEADER( PWIDTH( 8 ), '    ', LU, UNTBUF )
+            
+            WRITE( LLGRDFMT, 94644 ) PWIDTH( 1 ), RPT_%DELIM,
+     &                               PWIDTH( 2 ), RPT_%DELIM,
+     &                               PWIDTH( 3 ), RPT_%DELIM,
+     &                               PWIDTH( 4 ), RPT_%DELIM,
+     &                               PWIDTH( 5 ), RPT_%DELIM,
+     &                               PWIDTH( 6 ), RPT_%DELIM,
+     &                               PWIDTH( 7 ), RPT_%DELIM,
+     &                               PWIDTH( 8 ), RPT_%DELIM
+        
+            LLGRDWIDTH = SUM( PWIDTH( 1:8 ) ) + 8*LV
+        
+        END IF
+
 C.........  Elevated flag column
         IF( RPT_%BYELEV ) THEN
             J = LEN_TRIM( HEADERS( IHDRELEV ) )
@@ -1156,6 +1468,17 @@ C.........  Stack group IDs when BY ELEVSTAT (RPT_%BYELEV)
 
             WRITE( STKGFMT, 94625 ) W1, RPT_%DELIM
             STKGWIDTH = W1 + LV
+        END IF
+
+C.........  Emissions release point type column
+        IF( RPT_%BYERPTYP ) THEN
+            J = LEN_TRIM( HEADERS( IHDRERTYP ) )
+            J = MAX( ERPLEN3, J )
+    
+            CALL ADD_TO_HEADER( J, HEADERS(IHDRERTYP), LH, HDRBUF )
+            CALL ADD_TO_HEADER( J, ' ', LU, UNTBUF )
+
+            ERTYPWIDTH = J + LV
         END IF
 
 C.........  Plant descriptions
@@ -1301,6 +1624,35 @@ C.............  Set NAICS name column width
             CALL ADD_TO_HEADER( J, ' ', LU, UNTBUF )
 
             NAIDSWIDTH = J + LV - 2       ! quotes in count for header print
+
+        END IF
+
+C.........  Variable column
+        IF( RPT_%RPTMODE .EQ. 3 ) THEN
+            NWIDTH = 0
+            DO I = 1, RPT_%NUMDATA
+                NWIDTH = MAX( NWIDTH, LEN_TRIM( OUTDNAM( I, RCNT ) ) )
+            END DO
+
+            J = LEN_TRIM( HEADERS( IHDRVAR ) )
+            J = MAX( NWIDTH, J )
+
+            CALL ADD_TO_HEADER( J, HEADERS(IHDRVAR), LH, HDRBUF )
+
+            VARWIDTH = J + LV
+
+C.............  Units
+            NWIDTH = 0
+            DO I = 1, RPT_%NUMDATA
+                NWIDTH = MAX( NWIDTH, LEN_TRIM( OUTUNIT( I ) ) )
+            END DO
+
+            J = LEN_TRIM( HEADERS( IHDRUNIT ) )
+            J = MAX( NWIDTH, J )
+
+            CALL ADD_TO_HEADER( J, HEADERS(IHDRUNIT), LH, HDRBUF )
+
+            UNITWIDTH = J + LV
 
         END IF
 
@@ -1491,7 +1843,8 @@ C                   add the ending parenthese
                     IF( L1 .LT. QAFMTL3-1 ) THEN      
                         IF( TMPFMT( L1:L1 ) .EQ. ',' ) L1 = L1 - 1
                         IF( RPT_%RPTMODE .EQ. 3 ) THEN
-                            OUTFMT = TMPFMT( 1:L1 ) // ',A,1X,A)'
+C                            OUTFMT = TMPFMT( 1:L1 ) // ',A,1X,A)'
+                            OUTFMT = TMPFMT( 1:L1 ) // ')'
                         ELSE
                             OUTFMT = TMPFMT( 1:L1 ) // ')'
                         END IF
@@ -1517,23 +1870,6 @@ C.................  Add next entry to units line buffer
                 CALL ADD_TO_HEADER( W1, TMPUNIT, LU, UNTBUF )
 
             END DO
-
-C.............  Units
-            IF( RPT_%RPTMODE .EQ. 3 ) THEN
-
-                NWIDTH = 0
-                DO I = 1, RPT_%NUMDATA
-                    NWIDTH = MAX( NWIDTH, LEN_TRIM( OUTUNIT( I ) ) )
-                END DO
-
-                J = LEN_TRIM( HEADERS( IHDRUNIT ) )
-                J = MAX( NWIDTH, J )
-
-                CALL ADD_TO_HEADER( J, HEADERS(IHDRUNIT), LH, HDRBUF )
-
-                UNITWIDTH = J + LV
-
-            END IF
 
         END IF     ! End if any data to output or not
 
@@ -1742,18 +2078,25 @@ C...........   Internal buffering formats............ 94xxx
 
 94020   FORMAT( 10( A, :, I3, :, 1X ) )
 
+94220   FORMAT( '(1X,A,",",I4.4,",",I2.2,",",I3.3,",",I1,"', A, '")' )
+
 94620   FORMAT( '(1X,I2.2,"/",I2.2,"/",I4.4,"', A, '")' )
 
 94625   FORMAT( '(1X,I', I2.2, ',"', A, '")' )
 
-94630   FORMAT( '(1X,I', I2.2, '.', I1, ',"', A, '")' )
+94630   FORMAT( '(1X,I', I2.2, '.', I2.2, ',"', A, '")' )
 
-94635   FORMAT( '(1X,', 'I',I2.2, ',"',A,'", I',I1, ',"',A,'")' )
+94635   FORMAT( '(1X,', 'I',I2.2, ',"',A,'", I',I2.2, ',"',A,'")' )
 
-94640   FORMAT( '(', 3('1X,F', I2.2, '.2,"', A, '",'), 
-     &          '1X,F', I2.2, '.2,"', A, '")' )
+94640   FORMAT( '(', 3('1X,F', I2.2, '.5,"', A, '",'), 
+     &          '1X,F', I2.2, '.5,"', A, '")' )
 
 94642   FORMAT( '(1X,F',I2.2,'.8,"', A,'",1X,F',I2.2,'.8,"',A,'")' )  ! lat/lons
+
+94643   FORMAT( '(', 4('1X,F', I2.2, '.2,"', A, '",'), 
+     &          '1X,F', I2.2, '.2,"', A, '")' )
+
+94644   FORMAT( '(', 8('1X,F', I2.2, '.8,"', A, '",'), ')' )
 
 94645   FORMAT( '(I', I1, ',"', A, '")' )
 

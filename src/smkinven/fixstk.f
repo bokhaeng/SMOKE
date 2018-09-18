@@ -46,7 +46,7 @@ C***************************************************************************
 
 C.........  MODULES for public variables
 C.........  This module contains the inventory arrays
-        USE MODSOURC, ONLY: CSOURC, CSCC, IFIP, 
+        USE MODSOURC, ONLY: CSOURC, CSCC, CIFIP, CERPTYP, 
      &                      STKHT, STKDM, STKVE, STKTK
 
         IMPLICIT NONE
@@ -67,10 +67,12 @@ C...........   EXTERNAL FUNCTIONS and their descriptions:
         INTEGER         STR2INT
         REAL            STR2REAL
         INTEGER         ENVINT
+        LOGICAL         USEEXPGEO
         REAL            ENVREAL
+        LOGICAL         ENVYN
 
         EXTERNAL        BLKORCMT, CRLF, FINDC, GETFLINE, STR2REAL,
-     &                  STR2INT, ENVINT, ENVREAL
+     &                  STR2INT, ENVINT, USEEXPGEO, ENVREAL, ENVYN
 
 C...........   ARGUMENTS and their descriptions:
 
@@ -117,7 +119,6 @@ C.........  SCC-FIPS code table
 C.........  Other local variables
         INTEGER         I, J, K, L1, L2, L3, S   !  counters and indices
 
-        INTEGER         FIP     !  temporary FIPs code
         INTEGER         NCNT    !  number of entry lines
         INTEGER         IOS     !  I/O error status
         INTEGER         IREC    !  current record number
@@ -139,10 +140,9 @@ C.........  Other local variables
         REAL   MINVE, MAXVE      !  min/max stack velocity
 
         LOGICAL      :: EFLAG = .FALSE.  !  error flag
+        LOGICAL      :: SFLAG = .FALSE.  ! true: skip applying stack para for fugitive src
         LOGICAL         DFLAG( NSRC )    ! true if source getting default parms
 
-        CHARACTER(8)       FMTFIP    !  format for converting FIPs code
-        CHARACTER(8)       FMTSTA    !  format for converting cntry/state
         CHARACTER(300)     BUFFER    !  temporary buffer
         CHARACTER(300)     MESG      !  message buffer
         CHARACTER(300)     LINE      !  read buffer for a line
@@ -170,6 +170,10 @@ C.........   Get maximum number of warnings
         MXWARN = ENVINT( WARNSET , ' ', 100, IOS )
 
         CALL M3MSG2( 'Reading default stack parameters...' )
+
+C.........  Skip if sources are fugitive
+        MESG  = 'Skip replacing stack parameters for fugitive sources'
+        SFLAG = ENVYN( 'NO_STACK_REPLACE_FUGITIVE',MESG,.FALSE.,IOS )
 
 C.........  Define min/max ranges of stack parameters
         MESG = 'Define minimum stack height in unit of meter'
@@ -229,10 +233,6 @@ C           so the wasted memory will not matter
         ALLOCATE( ID3( NLINE ), STAT=IOS )
         CALL CHECKMEM( IOS, 'ID3', PROGNAME )
 
-C.........  Create format for writing FIPS code and country/state code
-        WRITE( FMTFIP, 94300 ) '(I', FIPLEN3  , '.', FIPLEN3, ')'
-        WRITE( FMTSTA, 94300 ) '(I', FIPLEN3-3, '.', FIPLEN3-3, ')'
-
 C.........  Create zero-filled buffers
         FIPZERO  = REPEAT( '0', FIPLEN3 )
         SCCZERO  = REPEAT( '0', SCCLEN3 )
@@ -262,11 +262,10 @@ C.............  Get lines
 
             NCNT = NCNT + 1      ! actual line #s after skipping blank and comments
 
-            FIP = STR2INT( SEGMENT( 1 ) ) 
-            WRITE( CFIP, FMTFIP ) FIP
-
+            CFIP = SEGMENT( 1 )
             TSCC = SEGMENT( 2 )
 
+            CALL PADZERO( CFIP )
             CALL PADZERO( TSCC )
 
             INDXA( NCNT ) = NCNT
@@ -287,7 +286,7 @@ C.........  Disaggregate PSTK data into 4 categories
         NR1   = 0
         NR2   = 0
         NR3   = 0
-        L1    = FIPLEN3 - 3  ! without county
+        L1    = STALEN3  ! without county
         L2    = L1 + 1
         L3    = FIPLEN3 + 1
         DO I = 1, NPSTK
@@ -310,7 +309,7 @@ C.........  Disaggregate PSTK data into 4 categories
                 TBL1( NR1 ) = TSCC
                 ID1 ( NR1 ) = J
 
-            ELSE IF( CCNY .EQ. '000' ) THEN     !  state and SCC
+            ELSE IF( CCNY .EQ. '000' .AND. .NOT. USEEXPGEO() ) THEN !  state and SCC
                 NR2 = NR2 + 1
                 TBL2( NR2 ) = CSTA // TSCC
                 ID2 ( NR2 ) = J
@@ -424,11 +423,20 @@ C...........   Treat parameters equal to 0 as missing
             K = 0                ! Initialize K to test if replacements made
             DFLAG( S ) = .FALSE. ! Initialize DFLAG to test if defaults used
 
+C.............  Skip for fugitive source (01)
+            IF( SFLAG ) THEN
+                IF( STR2INT( CERPTYP(S) ) == 1 ) THEN
+                    STKHT( S ) = 0.0
+                    STKDM( S ) = 0.0
+                    STKTK( S ) = 0.0
+                    STKVE( S ) = 0.0
+                    CYCLE
+                END IF
+            END IF
+
 C.............  Set up temporary character strings
-            FIP = IFIP( S )
-            SID = FIP / 1000
-            WRITE( CFIP, FMTFIP ) FIP
-            WRITE( CSTA, FMTSTA ) SID
+            CFIP = CIFIP( S )
+            CSTA = CFIP( 1:STALEN3 )
             TSCC = CSCC( S )
             CFIPSCC  = CFIP // TSCC
             CFIPSCCZ = CFIP // SCCZERO

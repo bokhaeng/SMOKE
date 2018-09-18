@@ -53,7 +53,6 @@
         INTEGER    , PUBLIC :: LSCCEND  ! end of left-SCC
         INTEGER    , PUBLIC :: MXCHRS   ! max no. of source characteristics
         INTEGER    , PUBLIC :: NCHARS   ! actual no. of source characteristics
-        INTEGER    , PUBLIC :: NEMSFILE ! no. EMS-95 files
         INTEGER    , PUBLIC :: NIACT =0 ! no. unique activities in inventory
         INTEGER    , PUBLIC :: NIPOL =0 ! no. unique pollutants in inventory
         INTEGER    , PUBLIC :: NIPPA =0 ! NIACT + NIPOL
@@ -86,6 +85,7 @@
 
 !.........  Allocatable/local variables for formulas
         CHARACTER(512),     PUBLIC      :: VAR_FORMULA = ' ' ! SMKINVEN_FORMULA
+        CHARACTER(IOULEN3), PUBLIC      :: NETCDFUNIT        ! NetCDF poll unit
         INTEGER,            PUBLIC      :: NCOMP = 0 ! no of Smkinven formuals  
         LOGICAL,            ALLOCATABLE :: CHKPLUS ( : ) ! true: formula uses a + sign
         LOGICAL,            ALLOCATABLE :: CHKMINUS( : ) ! true: formula uses a - sign

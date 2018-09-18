@@ -48,7 +48,13 @@ C***********************************************************************
 C.........  MODULES for public variables
 C...........   This module is the inventory arrays
         USE MODSOURC, ONLY: CPDESC, CSOURC, STKHT, STKDM, STKTK, STKVE,
-     &                      XLOCA, YLOCA
+     &                      XLOCA, YLOCA, FUGHGT, FUGWID, FUGLEN, FUGANG
+
+C.........  This module contains the global variables for the 3-d grid
+        USE MODGRID, ONLY:  NCOLS, NROWS, XORIG, YORIG, XOFF, YOFF,
+     &                      GDTYP, XCELL, YCELL, XCENT, YCENT,
+     &                      P_ALP, P_BET, P_GAM, OFFLAG, GRDNM,
+     &                      XOFF_A, YOFF_A, XDIFF, YDIFF, NGRID
 
 C.........  This module contains the lists of unique source characteristics
         USE MODLISTS, ONLY: SCCDESC, SCCDLEV, SICDESC, MACTDESC, 
@@ -68,11 +74,13 @@ C.........  This module contains Smkreport-specific settings
      &                      STKPFMT, STKPWIDTH, ELEVWIDTH,
      &                      PDSCWIDTH, SDSCWIDTH, SPCWIDTH, MINC,
      &                      LOC_BEGP, LOC_ENDP, OUTDNAM, OUTUNIT,
-     &                      ALLRPT, SICFMT, SICWIDTH, SIDSWIDTH,
+     &                      ALLRPT, SICWIDTH, SIDSWIDTH, UNITWIDTH,
      &                      MACTWIDTH, MACDSWIDTH, NAIWIDTH,
      &                      NAIDSWIDTH, STYPWIDTH, LTLNFMT,
      &                      LTLNWIDTH, DLFLAG, ORSWIDTH, ORSDSWIDTH,
-     &                      STKGWIDTH, STKGFMT, INTGRWIDTH
+     &                      STKGWIDTH, STKGFMT, INTGRWIDTH, GEO1WIDTH,
+     &                      ERTYPWIDTH, FUGPFMT, FUGPWIDTH, LAMBWIDTH,
+     &                      LAMBFMT, LLGRDFMT, LLGRDWIDTH
 
 C.........  This module contains report arrays for each output bin
         USE MODREPBN, ONLY: NOUTBINS, BINDATA, BINSCC, BINPLANT,
@@ -85,34 +93,36 @@ C.........  This module contains report arrays for each output bin
      &                      BINELEV, BINSNMIDX, BINBAD, BINSIC, 
      &                      BINSICIDX, BINMACT, BINMACIDX, BINNAICS,
      &                      BINNAIIDX, BINSRCTYP, BINORIS, BINORSIDX,
-     &                      BINORIS, BINORSIDX, BINSTKGRP, BININTGR
+     &                      BINORIS, BINORSIDX, BINSTKGRP, BININTGR,
+     &                      BINGEO1IDX, BINERPTYP
 
 C.........  This module contains the arrays for state and county summaries
-        USE MODSTCY, ONLY: CTRYNAM, STATNAM, CNTYNAM, NORIS, ORISDSC
+        USE MODSTCY, ONLY: CTRYNAM, STATNAM, CNTYNAM, NORIS, ORISDSC,
+     &                     GEOLEV1NAM
 
 C.........  This module contains the information about the source category
-        USE MODINFO, ONLY: MXCHRS, NCHARS
+        USE MODINFO, ONLY: MXCHRS, NCHARS, BYEAR
+
+C.........  MODULES for I/O API INTERFACEs, geo-transform codes:
+        USE M3UTILIO 
+        USE MODGCTP
 
         IMPLICIT NONE
 
 C...........   INCLUDES
         INCLUDE 'EMCNST3.EXT'   !  emissions constant parameters
 
-C...........  EXTERNAL FUNCTIONS and their descriptions:
-        CHARACTER(2)  CRLF
-        EXTERNAL   CRLF
-
 C...........   SUBROUTINE ARGUMENTS
-        INTEGER     , INTENT (IN) :: FDEV
-        INTEGER     , INTENT (IN) :: RCNT
-        INTEGER     , INTENT (IN) :: NDATA
-        INTEGER     , INTENT (IN) :: JDATE
-        INTEGER     , INTENT (IN) :: JTIME
-        INTEGER     , INTENT (IN) :: LAYER    ! layer number for output
-        CHARACTER(*), INTENT (IN) :: DELIM
-        CHARACTER(*), INTENT (IN) :: OUTFMT
-        LOGICAL     , INTENT (IN) :: ZEROFLAG
-        LOGICAL     , INTENT(OUT) :: EFLAG
+        INTEGER     , INTENT(IN   ) :: FDEV
+        INTEGER     , INTENT(IN   ) :: RCNT
+        INTEGER     , INTENT(IN   ) :: NDATA
+        INTEGER     , INTENT(IN   ) :: JDATE
+        INTEGER     , INTENT(IN   ) :: JTIME
+        INTEGER     , INTENT(IN   ) :: LAYER    ! layer number for output
+        CHARACTER(*), INTENT(IN   ) :: DELIM
+        CHARACTER(*), INTENT(IN   ) :: OUTFMT
+        LOGICAL     , INTENT(IN   ) :: ZEROFLAG
+        LOGICAL     , INTENT(INOUT) :: EFLAG
 
 C...........   Local parameters
         INTEGER, PARAMETER :: STRLEN = 10000   ! Maximum info string length
@@ -125,7 +135,7 @@ C...........   Arrays for source characteristics output formatting
 C...........   Other local variables
         INTEGER     I, J, K, L, L1, N, S, V           ! counters and indices
 
-        INTEGER     DAY                       ! day of month
+        INTEGER     DAY, JDAY, WDAY           ! day of month, julian day, Weekday
         INTEGER     IOS                       ! i/o status
         INTEGER     LE                        ! output string accum. length
         INTEGER     LV                        ! width of delimiter
@@ -138,18 +148,27 @@ C...........   Other local variables
         INTEGER     STIDX                     ! starting index of loop
         INTEGER     EDIDX                     ! ending index of loop
 
+        REAL*8      LAMBX, LAMBY, UTM_X, UTM_Y, UTM_Z ! grid lambert/utm coord for point sources
+        REAL*8      DLAT, DLON, DXORIG, DYORIG    ! grid lambert/utm coord for cell center 
+        REAL*8      X0(1,1), Y0(1,1)              ! grid lambert/utm coord for cell center 
+        
+        REAL*8      SWLAT, SWLON, NWLAT, NWLON, NELAT, NELON, SELAT, SELON ! lat-lon coords of grid cell
+
         INTEGER, SAVE :: PRCNT = 0
 
         LOGICAL, SAVE :: FIRSTIME  = .TRUE.   ! true: first time routine called
 
         REAL        ECHECK                    ! tmp sum of emissions in a bin
-
+        
+        CHARACTER(1)        AGT               ! tmp aggregation type for CARB QADEF report
+        CHARACTER(17)       OUTCARB           !  output date string for CARB QADEF report
         CHARACTER(12)       OUTDATE           !  output date string
         CHARACTER(100)   :: BADRGNM = 'Name unknown'
-        CHARACTER(100)      BUFFER            !  string building buffer
+        CHARACTER(200)      BUFFER            !  string building buffer
         CHARACTER(300)      MESG              !  message buffer
         CHARACTER(STRLEN)   STRING            !  output string
         CHARACTER(SCCLEN3)  TSCC              ! tmp SCC string
+        CHARACTER(FIPLEN3)  TFIPS             ! tmp FIPS string
 
         CHARACTER(16) :: PROGNAME = 'WRREPOUT' ! program name
 
@@ -159,13 +178,16 @@ C   begin body of subroutine WRREPOUT
 C.........  Create hour for output
         OUTHOUR = JTIME / 10000 + 1
 
+C.............  Width of delimeter
+        LV = LEN_TRIM( DELIM )
+
 C.........  When a new report is starting...
         IF( RCNT .NE. PRCNT ) THEN
 
 C.............  Transfer array info to scalar info for this report
             RPT_ = ALLRPT( RCNT )  ! multi-value 
 
-            LREGION = ( RPT_%BYCNRY .OR. RPT_%BYSTAT .OR. RPT_%BYCNTY )
+            LREGION = ( RPT_%BYGEO1 .OR. RPT_%BYCNRY .OR. RPT_%BYSTAT .OR. RPT_%BYCNTY )
 
 C.............  Allocate memory for LF if not available already
             IF( .NOT. ALLOCATED( LF ) ) THEN
@@ -175,9 +197,6 @@ C.............  Allocate memory for LF if not available already
 
 C.............  Initialize output status of source characteristics
             LF = .FALSE.    ! array
-
-C.............  Width of delimeter
-            LV = LEN_TRIM( DELIM )
 
 C.............  Update logical source-characteristics fields
 C.............  In future, there can be different cases here for "BY STACK", for
@@ -208,18 +227,6 @@ c               is determined by the report settings.
                 LE     = 1
                 LX     = 1
 
-C.............  Include variable in string
-                IF( RPT_%RPTMODE .EQ. 3 ) THEN
-
-                    L = VARWIDTH
-                    L1 = L - LV
-                    STRING = STRING( 1:LE ) //
-     &                       OUTDNAM( V, RCNT )( 1:L1 ) // DELIM
-                    MXLE = MXLE + L
-                    LE = MIN( MXLE, STRLEN )
-
-                END IF
-
 C..............  Include user-defined label in string
                 IF( RPT_%USELABEL ) THEN
 
@@ -230,8 +237,44 @@ C..............  Include user-defined label in string
 
                 END IF
 
+C.............  Include date in string for CARB QADEF report
+                IF( RPT_%CARB ) THEN
+
+C.................  Temporal resolution (A:Annual, D:Daily, H:Hourly)
+                    IF( RPT_%BYDATE .AND. .NOT. RPT_%BYHOUR ) THEN
+                        AGT = 'D'
+                    ELSE IF( RPT_%BYHOUR ) THEN
+                        AGT = 'H'
+                    ELSE
+                        AGT = 'A'
+                    ENDIF
+
+
+C.................  Compute year, month, julidan day, day of week (1,,,,,,7)
+                    YEAR = JDATE / 1000
+                    IF( AGT == 'A' ) THEN
+                        MONTH = 0
+                        WDAY = 0
+                        JDAY = 0
+                    ELSE
+                        CALL DAYMON( JDATE, MONTH, DAY )
+                        WDAY = WKDAY( JDATE )
+                        JDAY = JDATE - ( YEAR * 1000 )
+                    ENDIF
+
+C.................  Add date field to header
+                    OUTCARB = ' '
+                    WRITE( OUTCARB, DATEFMT ) AGT, YEAR, MONTH, JDAY, WDAY
+
+                    STRING = STRING( 1:LE ) // OUTCARB
+                    MXLE = MXLE + DATEWIDTH + LX
+                    LE = MIN( MXLE, STRLEN )
+                    LX = 0
+
+                END IF
+
 C.............  Include date in string
-                IF( RPT_%BYDATE ) THEN
+                IF( RPT_%BYDATE .AND. .NOT. RPT_%CARB ) THEN
 
 C.................  Get month and day from Julian date
                     CALL DAYMON( JDATE, MONTH, DAY )
@@ -260,6 +303,18 @@ C.............  Include hour in string
                         LE = MIN( MXLE, STRLEN )
                         LX = 0
                     END IF
+
+                ELSE IF( .NOT. RPT_%BYHOUR .AND. RPT_%CARB ) THEN
+                    IF( .NOT. DLFLAG ) THEN
+                        BUFFER = ' '
+                        OUTHOUR = 0
+                        WRITE( BUFFER, HOURFMT ) OUTHOUR  ! Integer
+                        STRING = STRING( 1:LE ) // BUFFER
+                        MXLE = MXLE + HOURWIDTH + LX
+                        LE = MIN( MXLE, STRLEN )
+                        LX = 0
+                    END IF
+
                 END IF
 
 C.............  Include layer in string
@@ -280,6 +335,13 @@ C.............  Include cell numbers in string
                     MXLE = MXLE + CELLWIDTH + LX
                     LE = MIN( MXLE, STRLEN )
                     LX = 0
+                ELSE IF( .NOT. RPT_%BYCELL .AND. RPT_%CARB ) THEN
+                    BUFFER = ' '
+                    WRITE( BUFFER, CELLFMT ) 0,0 ! Integers
+                    STRING = STRING( 1:LE ) // BUFFER
+                    MXLE = MXLE + CELLWIDTH + LX
+                    LE = MIN( MXLE, STRLEN )
+                    LX = 0
                 END IF
 
 C.............  Include source number in string
@@ -294,14 +356,40 @@ C.............  Include source number in string
 
 C.............  Include country/state/county code in string
                 IF( LREGION ) THEN
-                    BUFFER = ' '
-                    WRITE( BUFFER, REGNFMT ) BINREGN( I )  ! Integer
-                    STRING = STRING( 1:LE ) // BUFFER
+
+                    IF( RPT_%CARB ) THEN
+                        TFIPS = BINREGN(I)(1:3)//','//BINREGN(I)(10:12)//','//BINREGN(I)(7:9)
+                    ELSE
+                        TFIPS = BINREGN( I )
+                    ENDIF
+
+                    STRING = STRING( 1:LE ) // TFIPS // DELIM
+                    MXLE = MXLE + REGNWIDTH + LX
+                    LE = MIN( MXLE, STRLEN )
+                    LX = 0
+                ELSE IF( .NOT. LREGION .AND. RPT_%CARB ) THEN
+                    STRING = STRING( 1:LE ) // '      ' // DELIM
                     MXLE = MXLE + REGNWIDTH + LX
                     LE = MIN( MXLE, STRLEN )
                     LX = 0
                 END IF
 
+C.............  Include region level 1 name in string
+                IF( RPT_%BYGEO1NAM ) THEN
+                    J = BINGEO1IDX( I )
+                    L = GEO1WIDTH
+                    L1 = L - LV - 1                        ! 1 for space
+                    IF( J .LE. 0 ) THEN
+                        STRING = STRING( 1:LE ) // 
+     &                           BADRGNM( 1:L1 ) // DELIM
+                    ELSE
+                        STRING = STRING( 1:LE ) // 
+     &                           GEOLEV1NAM( J )( 1:L1 ) // DELIM
+                    END IF
+
+                    MXLE = MXLE + L
+                    LE = MIN( MXLE, STRLEN )
+                END IF
 
 C.............  Include country name in string
                 IF( RPT_%BYCONAM ) THEN
@@ -357,7 +445,7 @@ C.............  Include SCC code in string
                     L = SCCWIDTH
                     L1 = L - LV - 1                        ! 1 for space
                     TSCC = BINSCC( I )
-                    IF( TSCC(1:2) .EQ. '00' ) TSCC='  '//TSCC(3:SCCLEN3)
+c                    IF( TSCC(1:2) .EQ. '00' ) TSCC='  '//TSCC(3:SCCLEN3)
                     STRING = STRING( 1:LE ) // 
      &                       TSCC( 1:L1 ) // DELIM
                     MXLE = MXLE + L + LX
@@ -367,13 +455,13 @@ C.............  Include SCC code in string
 
 C.............  Include SIC code
                 IF( RPT_%BYSIC ) THEN
-                    BUFFER = ' '
-                    WRITE( BUFFER, SICFMT ) BINSIC( I )    ! Integer
-                    STRING = STRING( 1:LE ) // BUFFER
-                    MXLE = MXLE + SICWIDTH + LX
+                    L = SICWIDTH
+                    L1 = L - LV - 1
+                    STRING = STRING( 1:LE ) // 
+     &                       BINSIC( I )( 1:MIN(L1,SICLEN3) ) // DELIM
+                    MXLE = MXLE + L + LX
                     LE = MIN( MXLE, STRLEN )
                     LX = 0
-
                 END IF
 
 C.............  Include INTEGRATE code in string
@@ -413,8 +501,8 @@ C.............  Include SRCTYP code in string
                 IF( RPT_%BYSRCTYP ) THEN
                     L = STYPWIDTH
                     L1 = L - LV - 1                        ! 1 for space
-                    STRING = STRING( 1:LE+9 ) // 
-     &                    BINSRCTYP( I )( 1:L1-9 ) // DELIM
+                    STRING = STRING( 1:LE+8 ) // 
+     &                    BINSRCTYP( I )( 1:L1-8 ) // DELIM
                     MXLE = MXLE + L + LX
                     LE = MIN( MXLE, STRLEN )
                     LX = 0
@@ -637,6 +725,17 @@ C.............  Include stack parameters
                     LE = MIN( MXLE, STRLEN )
                 END IF
 
+C.............  Include fugitive parameters
+                IF( RPT_%FUGPARM ) THEN
+                    S = BINSMKID( I )
+                    BUFFER = ' '
+                    WRITE( BUFFER, FUGPFMT ) FUGHGT( S ), FUGWID( S ),
+     &                                       FUGLEN( S ), FUGANG( S )
+                    STRING = STRING( 1:LE ) // BUFFER
+                    MXLE = MXLE + FUGPWIDTH
+                    LE = MIN( MXLE, STRLEN )
+                END IF
+
 C.............  Include lat/lons for point sources
                 IF( RPT_%LATLON ) THEN
                     S = BINSMKID( I )
@@ -645,6 +744,80 @@ C.............  Include lat/lons for point sources
                     STRING = STRING( 1:LE ) // BUFFER
                     MXLE = MXLE + LTLNWIDTH
                     LE = MIN( MXLE, STRLEN )
+                END IF
+
+C.............  Include grid lambert/utm coordinates for point source
+                IF( RPT_%GRDCOR ) THEN
+
+                    S = BINSMKID( I )
+                    LAMBX = 0.0D0
+                    LAMBY = 0.0D0
+                    UTM_X = 0.0D0
+                    UTM_Y = 0.0D0
+                    UTM_Z = 0.0D0
+                    DLON  = XLOCA( S )
+                    DLAT  = YLOCA( S )
+
+C.....................  Compute lamber x&Y and utm x&y coordinates for point source
+                    CALL XY2XY( GDTYP  , P_ALP, P_BET, P_GAM, XCENT, YCENT,
+     &                          LATGRD3, 0.0D0, 0.0D0, 0.0D0, 0.0D0, 0.0D0,
+     &                          DLON, DLAT, LAMBX, LAMBY )
+
+C.....................  Compute the LL for grid cell center UTM zone
+                    DXORIG = XORIG + XCELL * ( BINX( I ) - 1 )
+                    DYORIG = YORIG + YCELL * ( BINY( I ) - 1 )
+                    CALL GRID2XY( LATGRD3, 0.0D0, 0.0D0, 0.0D0, 0.0D0, 0.0D0,
+     &                            GDTYP, P_ALP, P_BET, P_GAM, XCENT, YCENT,
+     &                            1, 1, DXORIG, DYORIG, XCELL, YCELL,
+     &                            X0, Y0 )
+                    UTM_Z = DBLE( FLOOR( ( ( X0(1,1) + 180.0 ) / 6.0 ) + 1.0 ) )
+
+                    CALL XY2XY( UTMGRD3, UTM_Z, 0.0D0, 0.0D0, 0.0D0, 0.0D0,
+     &                          LATGRD3, 0.0D0, 0.0D0, 0.0D0, 0.0D0, 0.0D0,
+     &                          DLON, DLAT, UTM_X, UTM_Y )
+
+                    BUFFER = ' '
+                    WRITE( BUFFER, LAMBFMT ) LAMBX, LAMBY, UTM_X, UTM_Y, UTM_Z 
+                    STRING = STRING( 1:LE ) // BUFFER
+                    MXLE = MXLE + LAMBWIDTH
+                    LE = MIN( MXLE, STRLEN )
+
+                END IF
+
+C.............  Include grid cell corner coordinates
+                IF( RPT_%GRDPNT ) THEN
+                
+                    DXORIG = XORIG + XCELL * ( BINX( I ) - 1 )  ! SW corner
+                    DYORIG = YORIG + YCELL * ( BINY( I ) - 1 )
+                    
+                    CALL XY2XY( LATGRD3, 0.0D0, 0.0D0, 0.0D0, 0.0D0, 0.0D0,
+     &                          GDTYP  , P_ALP, P_BET, P_GAM, XCENT, YCENT,
+     &                          DXORIG, DYORIG, SWLON, SWLAT )
+                    
+                    DYORIG = DYORIG + YCELL  ! NW corner
+                    
+                    CALL XY2XY( LATGRD3, 0.0D0, 0.0D0, 0.0D0, 0.0D0, 0.0D0,
+     &                          GDTYP  , P_ALP, P_BET, P_GAM, XCENT, YCENT,
+     &                          DXORIG, DYORIG, NWLON, NWLAT )
+                    
+                    DXORIG = DXORIG + XCELL  ! NE corner
+                    
+                    CALL XY2XY( LATGRD3, 0.0D0, 0.0D0, 0.0D0, 0.0D0, 0.0D0,
+     &                          GDTYP  , P_ALP, P_BET, P_GAM, XCENT, YCENT,
+     &                          DXORIG, DYORIG, NELON, NELAT )
+                    
+                    DYORIG = DYORIG - YCELL  ! SE corner
+                    
+                    CALL XY2XY( LATGRD3, 0.0D0, 0.0D0, 0.0D0, 0.0D0, 0.0D0,
+     &                          GDTYP  , P_ALP, P_BET, P_GAM, XCENT, YCENT,
+     &                          DXORIG, DYORIG, SELON, SELAT )
+                    
+                    BUFFER = ' '
+                    WRITE( BUFFER, LLGRDFMT ) SWLAT, SWLON, NWLAT, NWLON, NELAT, NELON, SELAT, SELON
+                    STRING = STRING( 1:LE ) // BUFFER
+                    MXLE = MXLE + LLGRDWIDTH
+                    LE = MIN( MXLE, STRLEN )
+                
                 END IF
 
 C.............  Include elevated sources flag
@@ -667,6 +840,17 @@ C.............  Include stack group IDs when elevated sources flag = Y
                     LE = MIN( MXLE, STRLEN )
                     LX = 0
 
+                END IF
+
+C.............  Include emissions release point type
+                IF( RPT_%BYERPTYP ) THEN
+                    L = ERTYPWIDTH
+                    L1 = L - LV - 1                        ! 1 for space
+                    STRING = STRING( 1:LE+15 ) //
+     &                       BINERPTYP( I )( 1:L1-15 ) // DELIM
+                    MXLE = MXLE + L + LX
+                    LE = MIN( MXLE, STRLEN )
+                    LX = 0
                 END IF
 
 C.............  Include plant description (for point sources)
@@ -732,9 +916,8 @@ C.............  This is knowingly including extra blanks before final quote
 
 C.....................  Write warning msg when the description is unavailable
                     N = INDEX( SICDESC( J ), 'Description unavailable' )
-                    WRITE( BUFFER, SICFMT ) BINSIC( I )    ! Integer
                     MESG = 'WARNING: Description of SIC ' // 
-     &                      TRIM( BUFFER ) // ' is not available'
+     &                      BINSIC( I ) // ' is not available'
                     IF ( N .GT. 0 ) CALL M3MESG( MESG )
 
                 END IF
@@ -774,6 +957,25 @@ C.....................  Write warning msg when the description is unavailable
                     MESG = 'WARNING: Description of NAICS ' // 
      &                      TRIM(BINNAICS( I )) // ' is not available'
                     IF ( N .GT. 0 ) CALL M3MESG( MESG )
+
+                END IF
+
+C.............  Include variable in string
+                IF( RPT_%RPTMODE .EQ. 3 ) THEN
+
+                    L = VARWIDTH
+                    L1 = L - LV
+                    STRING = STRING( 1:LE ) //
+     &                       OUTDNAM( V, RCNT )( 1:L1 ) // DELIM
+                    MXLE = MXLE + L
+                    LE = MIN( MXLE, STRLEN )
+
+                    L = UNITWIDTH
+                    L1 = L - LV
+                    STRING = STRING( 1:LE ) //
+     &                       OUTUNIT( V )( 1:L1 ) // DELIM
+                    MXLE = MXLE + L
+                    LE = MIN( MXLE, STRLEN )
 
                 END IF
 
@@ -864,8 +1066,7 @@ C.............  Write out this record
 
                 ELSE
 
-                    WRITE( FDEV, OUTFMT ) STRING( 1:LE ), BINDATA(I,V),
-     &                                DELIM, OUTUNIT( V )
+                    WRITE( FDEV, OUTFMT ) STRING( 1:LE ), BINDATA(I,V)
 
                 END IF
 

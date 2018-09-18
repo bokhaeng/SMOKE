@@ -35,7 +35,7 @@ C***************************************************************************
 
 C...........   MODULES for public variables
 C...........   This module is the inventory arrays
-        USE MODSOURC, ONLY: INVYR
+        USE MODSOURC, ONLY: INVYR, FUGHGT, FUGWID, FUGLEN, FUGANG
 
 C...........   This module contains the information about the source category
         USE MODINFO, ONLY: CATEGORY, CRL, CATDESC, BYEAR, 
@@ -68,7 +68,7 @@ C...........   EXTERNAL FUNCTIONS and their descriptions:
 C...........  LOCAL PARAMETERS and their descriptions:
 
         CHARACTER(50), PARAMETER :: 
-     &  CVSW = '$Name$' ! CVS release tag
+     &  CVSW = '$Name SMOKEv4.6_Sep2018$' ! CVS release tag
 
 C...........  LOCAL VARIABLES and their descriptions:
 C...........  Local parameters
@@ -153,7 +153,6 @@ C...........   Other local variables
         REAL            PSFAC      ! tmp pollutant-source control factor
 
         LOGICAL      :: EFLAG   = .FALSE.  ! true: error found
-        LOGICAL      :: IDAFLAG = .FALSE.  ! true: IDA output file(s) 
         LOGICAL      :: LAR2PT  = .FALSE.  ! true: area inven has xloc/yloc
         LOGICAL      :: ORLFLAG = .FALSE.  ! true: ORL output file
         LOGICAL      :: PFLAG   = .FALSE.  ! true: project matrix encountered
@@ -217,11 +216,6 @@ C.........  Get environment variables that control this program
         EVNAME = 'SMK_GRWSMKOUT_YN'
         MESG   = 'Output SMOKE inventory file'
         SMKFLAG = ENVYN( EVNAME, MESG, .TRUE., IOS )
-        IF( IOS .GT. 0 ) EFLAG = .TRUE.
-        
-        EVNAME = 'SMK_GRWIDAOUT_YN'
-        MESG   = 'Output IDA inventory file'
-        IDAFLAG = ENVYN( EVNAME, MESG, .FALSE., IOS )
         IF( IOS .GT. 0 ) EFLAG = .TRUE.
         
         EVNAME = 'SMK_GRWORLOUT_YN'
@@ -544,7 +538,7 @@ C           named "ALL" and "PFAC"
 c note: the "all" feature is not documented in cntlmat because it has not
 C    n: been implemented
 
-        IVARNAMS( 1 ) = 'IFIP'
+        IVARNAMS( 1 ) = 'CIFIP'
         IVARNAMS( 2 ) = 'TZONES'
         IVARNAMS( 3 ) = 'TPFLAG'
         IVARNAMS( 4 ) = 'INVYR'
@@ -554,7 +548,7 @@ C    n: been implemented
         CASE ( 'AREA' )
             NINVARR = 11
             IVARNAMS( 5 )  = 'CELLID'
-            IVARNAMS( 6 )  = 'ISIC'
+            IVARNAMS( 6 )  = 'CISIC'
             IVARNAMS( 7 )  = 'CSCC'
             IVARNAMS( 8 )  = 'CSOURC'
             IVARNAMS( 9 )  = 'CMACT'
@@ -576,7 +570,7 @@ C    n: been implemented
 
         CASE ( 'POINT' )
             NINVARR = 22
-            IVARNAMS( 5  ) = 'ISIC'
+            IVARNAMS( 5  ) = 'CISIC'
             IVARNAMS( 6  ) = 'XLOCA'
             IVARNAMS( 7  ) = 'YLOCA'
             IVARNAMS( 8  ) = 'STKHT'
@@ -594,6 +588,20 @@ C    n: been implemented
             IVARNAMS( 20 ) = 'CERPTYP'
             IVARNAMS( 21 ) = 'CNEIUID'
             IVARNAMS( 22 ) = 'CEXTORL'
+
+            ALLOCATE( FUGHGT( NSRC ), STAT=IOS )
+            CALL CHECKMEM( IOS, 'FUGHGT', PROGNAME )
+            ALLOCATE( FUGWID( NSRC ), STAT=IOS )
+            CALL CHECKMEM( IOS, 'FUGWID', PROGNAME )
+            ALLOCATE( FUGLEN( NSRC ), STAT=IOS )
+            CALL CHECKMEM( IOS, 'FUGLEN', PROGNAME )
+            ALLOCATE( FUGANG( NSRC ), STAT=IOS )
+            CALL CHECKMEM( IOS, 'FUGANG', PROGNAME )
+
+            FUGHGT   = 0.        ! array
+            FUGWID   = 0.        ! array
+            FUGLEN   = 0.        ! array
+            FUGANG   = 0.        ! array
 
         END SELECT
 
@@ -613,7 +621,7 @@ C.........  Allocate memory for and read in required inventory characteristics
         CALL RDINVCHR( CATEGORY, ENAME, SDEV, NSRC, NINVARR, IVARNAMS )
 
 C.........  Open output file(s)
-        CALL OPENGRWOUT( ENAME, PPYEAR, NAME1, SMKFLAG, IDAFLAG,
+        CALL OPENGRWOUT( ENAME, PPYEAR, NAME1, SMKFLAG,
      &                   ORLFLAG, ODEV, DDEV, VDEV, RDEV, 
      &                   ONAME, DATPATH )
 
@@ -646,16 +654,6 @@ C           requested.  Do not write out the companion ASCII file as it would
 C           be identical to that of the original inventory.
         IF( ONAME .NE. 'NONE' ) THEN
             CALL WRINVCHR( ONAME, 0, LAR2PT, .FALSE. )
-        END IF
-
-C.........  Processing when IDA output is needed...
-        IF( IDAFLAG ) THEN
-
-C.............  Allocate memory for unit numbers for IDA temporary files
-            ALLOCATE( TDEV( NIPPA ), STAT=IOS )
-            CALL CHECKMEM( IOS, 'TDEV', PROGNAME )
-            TDEV = 0   ! array
- 
         END IF
 
 C.........  Write out the map-formatted intermediate inven header
@@ -752,12 +750,6 @@ C                   and projection matrices
 
                     END IF
 
-                ELSE
-                	
-                    CEFF( S ) = 0.
-                    REFF( S ) = 0.
-                    RPEN( S ) = 0.
-                	  
                 END IF
 
 C.................  Set default factors
@@ -849,46 +841,6 @@ C.................  Write the map inventory file entry
 
             END IF
 
-C.............  Prepare pollutant/activity information and write it out for IDA
-            IF( IDAFLAG ) THEN
-
-C...............  Allocate memory for src-based output arrays, if needed
-                IF( .NOT. ALLOCATED( SRCDAT ) ) THEN
-                    ALLOCATE( SRCDAT( NSRC,NPVAR ), STAT=IOS )
-                    CALL CHECKMEM( IOS, 'SRCDAT', PROGNAME )
-                END IF
-
-                SRCDAT = 0.    ! array
-                DO C = 1, NREC
-                    S = SRCID( C )
-                    
-C.....................  Convert control efficiency, rule effectiveness, and rule
-C                       penetration values back to 0-100 scale
-C                       Can use VNAMESET since FileSet headers haven't been changed
-                    DO J = 1, NPVAR
-                        ADJVAL = .FALSE.
-                        
-                        IF( VNAMESET( J+1 )(1:CPRTLEN3) == CTLEFFRT )
-     &                      ADJVAL = .TRUE.
-                        IF( VNAMESET( J+1 )(1:CPRTLEN3) == RULEFFRT )
-     &                      ADJVAL = .TRUE.
-                        IF( VNAMESET( J+1 )(1:CPRTLEN3) == RULPENRT )
-     &                      ADJVAL = .TRUE.
-                        
-                        IF( ADJVAL ) THEN
-                            SRCDAT( S,J ) = DATAVAR( C,J )*100
-                        ELSE
-                            SRCDAT( S,J ) = DATAVAR( C,J )
-                        END IF
-                    END DO
-                END DO
-
-C.................  Write out temporary format for IDA                    
-                CALL WRIDAPOL( CATEGORY, VARBUF, NSRC, NPVAR, SRCDAT, 
-     &                         TDEV( V ), IOS )
-
-            END IF
-
 C.............  Write out ORL format for current pollutant
             IF( ORLFLAG ) THEN
                 CALL WRORLOUT( RDEV, VARBUF, NREC, NPVAR, SRCID,
@@ -909,22 +861,6 @@ C.........  Write out the map-formatted intermediate inven header
             MESG = 'ERROR: Could not read and write all pollutant-' //
      &             'specific variables'
             CALL M3EXIT( PROGNAME, 0, 0, MESG, 2 )
-        END IF
-
-C.........  For IDA output
-        IF( IDAFLAG ) THEN
-
-            MESG = 'Writing IDA-formatted outputs...'
-            CALL M3MSG2( MESG )
-
-            CALL WRIDAOUT( DDEV, VDEV, TDEV, IOS )
-
-            IF( IOS .GT. 0 ) THEN
-                MESG = 'ERROR: Could not read and write all source ' //
-     &                 'characteristics for IDA output.'
-                CALL M3EXIT( PROGNAME, 0, 0, MESG, 2 )
-            END IF
-
         END IF
 
 C.........  Exit program with normal completion

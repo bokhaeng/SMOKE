@@ -41,7 +41,9 @@ C.........  This module contains the global variables for the 3-d grid
         USE MODGRID, ONLY: GRDNM, GDTYP, NCOLS, NROWS, 
      &                     P_ALP, P_BET, P_GAM, XCENT, YCENT,
      &                     XORIG, YORIG, XCELL, YCELL
-     
+
+        USE MODGRDLIB
+ 
         IMPLICIT NONE
 
 C...........   INCLUDES
@@ -49,16 +51,13 @@ C...........   INCLUDES
         INCLUDE 'IODECL3.EXT'   !  I/O API function declarations
 
 C...........   EXTERNAL FUNCTIONS and their descriptions:
-        LOGICAL       INGRID
-        CHARACTER(16) PROMPTMFILE
-        
-        EXTERNAL   INGRID, PROMPTMFILE
+        CHARACTER(16), EXTERNAL :: PROMPTMFILE
 
 C...........   SUBROUTINE ARGUMENTS
         INTEGER, INTENT (IN) :: NRECS          ! no. records w/ coordinates
         INTEGER, INTENT (IN) :: NGRID          ! no. grid cells
-        REAL   , INTENT (IN) :: XLOCA( NRECS ) ! X-coordinate in projection
-        REAL   , INTENT (IN) :: YLOCA( NRECS ) ! Y-ccordinate in projection
+        REAL(8), INTENT (IN) :: XLOCA( NRECS ) ! X-coordinate in projection
+        REAL(8), INTENT (IN) :: YLOCA( NRECS ) ! Y-ccordinate in projection
         INTEGER, INTENT(OUT) :: NEXCLD         ! no. sources excluded
         INTEGER, INTENT(OUT) :: NX   ( NGRID ) ! no. of sources per cell
         INTEGER, INTENT(OUT) :: INDX ( NRECS ) ! sorting index
@@ -66,8 +65,8 @@ C...........   SUBROUTINE ARGUMENTS
         INTEGER, INTENT(OUT) :: SN   ( NRECS ) ! record number
 
 C...........   Allocatable arrays
-        REAL, ALLOCATABLE :: XVALS( :,: ) ! x values for grid cell boundaries
-        REAL, ALLOCATABLE :: YVALS( :,: ) ! y values for grid cell boundaries
+        REAL*8, ALLOCATABLE :: XVALS( :,: ) ! x values for grid cell boundaries
+        REAL*8, ALLOCATABLE :: YVALS( :,: ) ! y values for grid cell boundaries
 
 C...........   Local variables
 
@@ -81,7 +80,7 @@ C...........   Local variables
         INTEGER         NRDOT ! number of rows in dot file
 
         REAL            STEP      ! distance to edge of column or row
-        REAL            XX, YY    ! tmp X and Y coordinates
+        REAL*8          XX, YY    ! tmp X and Y coordinates
         REAL            XMIN      ! minimum location for column
         REAL            XMAX      ! maximum location for column
         REAL            YMIN      ! minimum location for row
@@ -141,7 +140,7 @@ C.........  Read grid cell coordinates
         END IF
 
 C.........  Convert coordinates to map projection units
-        CALL CONVRTXY( NCDOT*NRDOT, GDTYP, GRDNM, P_ALP, P_BET, P_GAM,
+        CALL CONVRTXY( NCDOT, NRDOT, GDTYP, GRDNM, P_ALP, P_BET, P_GAM,
      &                 XCENT, YCENT, XVALS, YVALS )
 
 C.........  Initialize number of sources per cell
@@ -158,7 +157,7 @@ C.........  Initialize scratch gridding matrix - before sparse storage
             XX = XLOCA( I )
             YY = YLOCA( I )
 
-            IF( .NOT. INGRID( XX, YY, NCOLS, NROWS, COL, ROW ) ) THEN
+            IF( .NOT. INGRID( XLOCA(I), YLOCA(I), NCOLS, NROWS, COL, ROW ) ) THEN
                 NEXCLD = NEXCLD + 1
                 CYCLE  ! To end of loop
             END IF

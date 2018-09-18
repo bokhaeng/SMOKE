@@ -43,7 +43,7 @@ C***********************************************************************
 
 C...........   MODULES for public variables
 C...........   This module is the source inventory arrays
-        USE MODSOURC, ONLY: CSOURC, IFIP, STKHT, STKDM, STKTK, STKVE,
+        USE MODSOURC, ONLY: CSOURC, CIFIP, STKHT, STKDM, STKTK, STKVE,
      &                      XLOCA, YLOCA
 
 C.........  This module contains arrays for plume-in-grid and major sources
@@ -52,6 +52,8 @@ C.........  This module contains arrays for plume-in-grid and major sources
 
 C.........  This module contains the information about the source category
         USE MODINFO, ONLY: NSRC, NCHARS, SC_BEGP, SC_ENDP
+
+        USE MODGRDLIB
 
         IMPLICIT NONE
 
@@ -71,14 +73,13 @@ C...........   ARGUMENTS and their descriptions:
 C...........   EXTERNAL FUNCTIONS and their descriptions:
         CHARACTER(2) CRLF
         LOGICAL      EVALCRIT
-        LOGICAL      FLTERR
         INTEGER      ENVINT
 
-        EXTERNAL    CRLF, EVALCRIT, FLTERR, ENVINT
+        EXTERNAL    CRLF, EVALCRIT, ENVINT
 
 C...........   LOCAL PARAMETERS and their descriptions:
-        INTEGER, PARAMETER :: MXLOCGRP = 2000  ! Max number groups per facility
-        INTEGER, PARAMETER :: MXSPGRP  = 2000  ! Max number sources per group
+        INTEGER, PARAMETER :: MXLOCGRP = 1000  ! Max number groups per facility
+        INTEGER, PARAMETER :: MXSPGRP  = 1000  ! Max number sources per group
 
 C...........   Local allocatable arrays
         INTEGER, ALLOCATABLE :: TGRPCNT( : ) ! tmp no. sources in group
@@ -109,13 +110,11 @@ C...........   OTHER LOCAL VARIABLES and their descriptions:
 
         INTEGER     G, I, J, L2, S, S2      ! counters and indices
 
-        INTEGER     FIP              ! tmp FIPS code
         INTEGER     GLM              ! local G max value
         INTEGER     IOS              ! i/o status
         INTEGER     LOCG             ! local G
         INTEGER  :: MXGCNT = 0           ! max of all GCNT entries
         INTEGER  :: NLOCGRP = 1      ! number of local (facility) groups
-        INTEGER     PFIP             ! previous FIPS code
         INTEGER     PRVG             ! G for previous interation
         INTEGER, SAVE :: NWARN = 0   ! warning count
         INTEGER, SAVE :: MXWARN      ! max no. warnings
@@ -132,8 +131,10 @@ C...........   OTHER LOCAL VARIABLES and their descriptions:
         LOGICAL :: LGRPALL = .FALSE.  ! true: group found for previous facility
         LOGICAL :: STATUS  = .FALSE.  ! true: tmp evaluation status
 
+        CHARACTER(FIPLEN3) CFIP      ! tmp FIPS code
+        CHARACTER(FIPLEN3) PFIP      ! previous FIPS code
         CHARACTER(300)  BUFFER       ! src description buffers
-        CHARACTER(300)  MESG         ! msg buffer
+        CHARACTER(400)  MESG         ! msg buffer
 
         CHARACTER(CHRLEN3) PLT   ! tmp facility ID
         CHARACTER(CHRLEN3) PPLT  ! tmp facility ID
@@ -186,11 +187,11 @@ C.........  Allocate temporary arrays for interpreting formulas
 
 C.........  Loop through sources to establish groups
         G    = 0
-        PFIP = 0
+        PFIP = ' '
         PPLT = ' '
         DO S = 1, NSRC
 
-            FIP = IFIP  ( S )
+            CFIP= CIFIP ( S )
             PLT = CSOURC( S )( SC_BEGP( 2 ):SC_ENDP( 2 ) )
             HT  = STKHT ( S )
             DM  = STKDM ( S )
@@ -202,7 +203,7 @@ C.........  Loop through sources to establish groups
 
 C.............  For a new facility, assume that a group will form, but store
 C               source ID to reset group if none materialized.
-            IF( FIP .NE. PFIP .OR. PLT .NE. PPLT ) THEN
+            IF( CFIP .NE. PFIP .OR. PLT .NE. PPLT ) THEN
 
 C.................  If there was one or more groups for the previous facility,
 C                   compute the group numbers and store info by source
@@ -241,7 +242,7 @@ C                       to reset the groups so that there aren't any holes.
                 END IF
 
 C.................  Initialize info for possible current group
-                PFIP    = FIP
+                PFIP    = CFIP
                 PPLT    = PLT
                 LGRPALL = .FALSE.
                 NLOCGRP = 1
@@ -428,7 +429,7 @@ C.........  Allocate memory for group information and populate group arrays
         GRPVE   = BADVAL3
         GRPFL   = BADVAL3
         GRPCNT  = 0
-        GRPFIP  = 0
+        GRPFIP  = ' '
 
 C.........  Store the group information more succinctly
         PRVG = 0
@@ -450,7 +451,7 @@ C.............  Store. Location will be from first source encountered in group
                 GRPVE ( G ) = TGRPVE ( I )
                 GRPFL ( G ) = TGRPFL ( I )
                 GRPCNT( G ) = TGRPCNT( I )
-                GRPFIP( G ) = IFIP   ( I )
+                GRPFIP( G ) = CIFIP  ( I )
 C.............  Otherwise, give warnings if stacks in the same group do not have
 C               the same stack locations.
             ELSE 
@@ -463,7 +464,7 @@ C               the same stack locations.
                     WRITE( MESG,94078 ) 'WARNING: Source latitude',
      &                     YLOCA( I ), 'is inconsistent with group' // 
      &                     CRLF() // BLANK10 // 'latitude', GRPLAT(G),
-     &                     'taken from the first source in the group, '
+     &                     'taken from the first source in the group '
      &                     // 'for source:' // CRLF() // BLANK10 //
      &                     BUFFER( 1:L2 ) 
                     IF( NWARN <= MXWARN ) CALL M3MESG( MESG )
@@ -473,7 +474,7 @@ C               the same stack locations.
                     WRITE( MESG,94078 ) 'WARNING: Source longitude',
      &                     XLOCA( I ), 'is inconsistent with group' // 
      &                     CRLF() // BLANK10 // 'longitude', GRPLON(G),
-     &                     'taken from the first source in the group, '
+     &                     'taken from the first source in the group '
      &                     // 'for source:' // CRLF() // BLANK10 //
      &                     BUFFER( 1:L2 ) 
                     IF( NWARN <= MXWARN )CALL M3MESG( MESG )
@@ -498,7 +499,7 @@ C...........   Internal buffering formats............ 94xxx
 
 94010   FORMAT( 10 ( A, :, I8, :, 2X  ) )
 
-94078   FORMAT( A, 1X, F6.2, 1X, A, 1X, F6.2, 1X, A )
+94078   FORMAT( A, 1X, F8.2, 1X, A, 1X, F8.2, 1X, A )
 
         END SUBROUTINE ASGNGRPS
 

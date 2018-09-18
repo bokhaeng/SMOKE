@@ -60,7 +60,7 @@ C...........   PARAMETERS:
 
 
 C...........   LOCAL PARAMETERS
-        CHARACTER*50, PARAMETER :: CVSW = '$Name$' ! CVS release tag
+        CHARACTER*50, PARAMETER :: CVSW = '$Name SMOKEv4.6_Sep2018$' ! CVS release tag
         REAL,         PARAMETER :: CONVPA = 1.0E-2  ! conversion factor for Pa to mb
 
 C...........   LOCAL VARIABLES and their descriptions:
@@ -224,7 +224,7 @@ C.............  Get line
 C.........  Read 2-D emissions file
         CNAME = PROMPTMFILE( 
      &          'Enter name for netCDF 2-d emissions file',
-     &          FSREAD3, 'INPUT', PROGNAME )
+     &          FSREAD3, 'INFILE', PROGNAME )
           
         IF ( .NOT. DESC3( CNAME ) ) THEN
               MESG = 'Could not get description of file "' //
@@ -397,7 +397,7 @@ C.................  Define top layer for output file
                     VGTOP3D = VGTOP
                     VGLVS3D = VGLVLS
                     MESG = 'Enter logical name for output file'
-                    ONAME = PROMPTMFILE( MESG, FSUNKN3, 'OUTPUT', 
+                    ONAME = PROMPTMFILE( MESG, FSUNKN3, 'OUTFILE', 
      &                                   PROGNAME )
                     FIRSTIME = .FALSE.
 

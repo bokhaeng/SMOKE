@@ -41,7 +41,7 @@ C***************************************************************************
 
 C.........  MODULES for public variables
 C...........   This module is the inventory arrays
-        USE MODSOURC, ONLY: IFIP, CSCC, XLOCA, YLOCA
+        USE MODSOURC, ONLY: CIFIP, CSCC, XLOCA, YLOCA
         
 C.........  This module contains the information about the source category
         USE MODINFO, ONLY: NSRC, NIPOL
@@ -80,7 +80,7 @@ C...........   SUBROUTINE ARGUMENTS
 C...........   Local variables
 
         CHARACTER       KEEP               ! determines if CAS number is kept
-        CHARACTER(26)   TSCCPOLL           ! temp. SCC/pollutant combination
+        CHARACTER(36)   TSCCPOLL           ! temp. SCC/pollutant combination
         CHARACTER(DDSLEN3)  DESC       ! temp. SCC description
         CHARACTER(SCCLEN3)  SCC        ! temp. SCC code
         CHARACTER(IOVLEN3)  DNAME      ! temp. data name
@@ -88,15 +88,15 @@ C...........   Local variables
         CHARACTER(SCCLEN3)  PSCC       ! previous SCC code
         CHARACTER(SCCLEN3)  TSCC       ! temp. SCC code
         CHARACTER(IOVLEN3)  TDNAME     ! temp. data name
+        CHARACTER(FIPLEN3)  PFIP       ! previous FIPS code
 
-        CHARACTER(26), ALLOCATABLE :: SCCPOLL( : ) ! SCC/pollutant combination
+        CHARACTER(36), ALLOCATABLE :: SCCPOLL( : ) ! SCC/pollutant combination
         
         INTEGER         I, J, K, L, S, IOS ! counters and indicies
         INTEGER         STATE              ! temp. state code
         INTEGER         NFIPS              ! temp. number of FIPS codes
         INTEGER         NSCCPOLL           ! total number of SCC // pollutant combinations
         INTEGER         POLL               ! temp. pollutant
-        INTEGER         PFIP               ! previous FIPS code
         
         INTEGER, ALLOCATABLE :: ASSIGNED( : ) ! number of FIPS codes assigned
         INTEGER, ALLOCATABLE :: UNASSIGN( : ) ! number of FIPS codes unassigned
@@ -359,6 +359,7 @@ C............  Find SCC in master list of SCC codes
      &             'SCC code, ', SCC, ' ,was not '//
      &             'found in master list of SCC codes.'
               CALL M3WARN( PROGNAME, 0, 0, MESG )
+              CYCLE
             END IF
             
             CBUF = SCCDESC( K )
@@ -395,14 +396,14 @@ C............  Allocate and initialize arrays
           UNASSIGN = 0
           
 C............  Initialize previous FIPS and SCC codes
-          PFIP = 99999
-          PSCC = '9999999999'
+          PFIP = ' '
+          PSCC = REPEAT( '9', SCCLEN3 )
           
 C............  Loop through sources
           DO S = 1, NSRC
         
 C............  If FIPS and SCC codes are equal to previous, cycle  
-            IF( IFIP( S ) .EQ. PFIP .AND. CSCC( S ) .EQ. PSCC ) CYCLE
+            IF( CIFIP( S ) .EQ. PFIP .AND. CSCC( S ) .EQ. PSCC ) CYCLE
 
 C............  If SCC is in the area-to-point SCC list then determine
 C              if it is assigned or unassigned     
@@ -420,7 +421,7 @@ C              if it is assigned or unassigned
             END IF
      
 C............  Reset previous FIPS and SCC codes to current ones       
-            PFIP = IFIP( S )
+            PFIP = CIFIP( S )
             PSCC = CSCC( S )
             
           END DO
@@ -463,29 +464,29 @@ C...........   Formatted file I/O formats............ 93xxx
 93060   FORMAT( 1X, A16, 4X, E16.10, 3X, F6.4, 2X, A16, 4X, E16.10,
      &          4X, A40, 4X, A40 )
      
-93070   FORMAT( 1X, A8, 5X, A9, 6X, A10, 4X, A16, 4X, A15,
+93070   FORMAT( 1X, A8, 15X, A9, 6X, A10, 4X, A16, 4X, A15,
      &          4X, A16 )
      
-93080   FORMAT( 43X, A11, 9X, A11 )
+93080   FORMAT( 53X, A11, 9X, A11 )
 
-93090   FORMAT( 1X, A10, 4X, A16,4X, I6, 4X, E16.10, 4X,
+93090   FORMAT( 1X, A20, 4X, A16,4X, I6, 4X, E16.10, 4X,
      &          E16.10, 4X, A )
      
-93100   FORMAT( 1X, A5, 2X, A8, 5X, A9, 6X, A10, 4X, A16, 4X, A15,
+93100   FORMAT( 1X, A5, 2X, A8, 15X, A9, 6X, A10, 4X, A16, 4X, A15,
      &          4X, A16 )
      
-93110   FORMAT( 50X, A11, 9X, A11 )
+93110   FORMAT( 60X, A11, 9X, A11 )
 
-93120   FORMAT( 1X, I2.2, 4X, A10, 4X, A16,4X, I6, 4X, E16.10, 4X,
+93120   FORMAT( 1X, I2.2, 4X, A20, 4X, A16,4X, I6, 4X, E16.10, 4X,
      &          E16.10, 4X, A )
      
-93130   FORMAT( 1X, A10 )
+93130   FORMAT( 1X, A20 )
 
-93140   FORMAT( 20X, A10 )
+93140   FORMAT( 30X, A10 )
 
-93150   FORMAT( 1X, A8, 4X, A8, 2X, A10, 4X, A15 )
+93150   FORMAT( 1X, A8, 14X, A8, 2X, A10, 4X, A15 )
 
-93160   FORMAT( 1X, A10, I10, 2X, I10, 4X, A )
+93160   FORMAT( 1X, A20, I10, 2X, I10, 4X, A )
      
 94010   FORMAT( 10( A, :, A16, :, 1X ) )
 

@@ -1,8 +1,7 @@
 
         SUBROUTINE RDDATAMEDSPT( LINE, READDATA, READPOL, NPOLPERLN, 
      &                          IYEAR, CORS, BLID, DESC, HT, DM, TK,
-     &                          FL, VL, SIC, LAT, LON, HDRFLAG, 
-     &                          EFLAG )
+     &                          FL, VL, SIC, LAT, LON, HDRFLAG )
 
 C***********************************************************************
 C  subroutine body starts at line 156
@@ -66,16 +65,15 @@ C...........   SUBROUTINE ARGUMENTS
         CHARACTER(ORSLEN3), INTENT (OUT) :: CORS                  ! DOE plant ID
         CHARACTER(BLRLEN3), INTENT (OUT) :: BLID                  ! boiler ID
         CHARACTER(40),      INTENT (OUT) :: DESC                  ! plant description
-        CHARACTER(4),       INTENT (OUT) :: HT                    ! stack height
-        CHARACTER(6),       INTENT (OUT) :: DM                    ! stack diameter
-        CHARACTER(4),       INTENT (OUT) :: TK                    ! exit temperature
-        CHARACTER(10),      INTENT (OUT) :: FL                    ! flow rate
+        CHARACTER(16),      INTENT (OUT) :: HT                    ! stack height
+        CHARACTER(16),      INTENT (OUT) :: DM                    ! stack diameter
+        CHARACTER(16),      INTENT (OUT) :: TK                    ! exit temperature
+        CHARACTER(16),      INTENT (OUT) :: FL                    ! flow rate
         CHARACTER(9),       INTENT (OUT) :: VL                    ! exit velocity
         CHARACTER(SICLEN3), INTENT (OUT) :: SIC                   ! SIC
-        CHARACTER(9),       INTENT (OUT) :: LAT                   ! stack latitude
-        CHARACTER(9),       INTENT (OUT) :: LON                   ! stack longitude
+        CHARACTER(16),      INTENT (OUT) :: LAT                   ! stack latitude
+        CHARACTER(16),      INTENT (OUT) :: LON                   ! stack longitude
         LOGICAL,            INTENT (OUT) :: HDRFLAG               ! true: line is a header line
-        LOGICAL,            INTENT (OUT) :: EFLAG                 ! error flag
 
 C...........   Local parameters, indpendent
         INTEGER, PARAMETER :: MXPOLFIL = 53  ! maximum pollutants in file
@@ -86,13 +84,8 @@ C...........   Other local variables
         INTEGER         I,J,N     ! counters and indices
 
         INTEGER         ROW, COL ! tmp grid row and col index
-        INTEGER, SAVE:: ICC     !  position of CNTRY in CTRYNAM
-        INTEGER, SAVE:: INY     !  inventory year
-        INTEGER         IOS     !  i/o status
-        INTEGER, SAVE:: NPOL    !  number of pollutants in file
-        INTEGER, SAVE:: STARTDATE = -1  !  start date
-
-        LOGICAL, SAVE:: FIRSTIME = .TRUE. ! true: first time routine is called
+        INTEGER         INY      !  inventory year
+        INTEGER         IOS      !  i/o status
 
         CHARACTER(300)      MESG                 !  message buffer
         CHARACTER(CHRLEN3)  ROWCOL           !  Row/Col & GAI lookup variables
@@ -102,36 +95,19 @@ C...........   Other local variables
 C***********************************************************************
 C   begin body of subroutine RDDATAMEDSPT
 
-C.........  Scan for header lines and check to ensure all are set 
-C           properly
-        CALL GETHDR( MXPOLFIL, .FALSE., .TRUE., .TRUE., 
-     &               LINE, ICC, INY, NPOL, IOS )
+        HDRFLAG = .FALSE.
+        NPOLPERLN = 6
 
-C.........  Interpret error status
-        IF( IOS == 4 ) THEN
-            WRITE( MESG,94010 ) 
-     &             'Maximum allowed data variables ' //
-     &             '(MXPOLFIL=', MXPOLFIL, CRLF() // BLANK10 //
-     &             ') exceeded in input file'
-            CALL M3EXIT( PROGNAME, 0, 0, MESG, 2 )
+        READPOL( 1 ) = 'CO'
+        READPOL( 2 ) = 'NOX'
+        READPOL( 3 ) = 'SOX'
+        READPOL( 4 ) = 'TOG'
+        READPOL( 5 ) = 'PM'
+        READPOL( 6 ) = 'NH3'
 
-        ELSE IF( IOS > 0 ) THEN
-            EFLAG = .TRUE.
-
-        END IF
-
-C.........  If a header line was encountered, set flag and return
-        IF( IOS >= 0 ) THEN
-            HDRFLAG = .TRUE.
-            NPOLPERLN = NPOL
-            IYEAR = INY
-            RETURN
-        ELSE
-            HDRFLAG = .FALSE.
-        END IF
-
-C.........  Set pollutants for this line
-        READPOL = TMPNAM
+C.........  set year
+        INY = STR2INT( LINE( 59:60 ) )
+        IYEAR = 2000 + INY
 
 C.........  Read source data
         CORS = ''  ! DOE plant ID
@@ -150,14 +126,11 @@ C.........  Read source data
         WRITE( ROWCOL,'( 2I3.3 )' ) COL, ROW
         N = INDEX1( ROWCOL, NMEDGRD, CMEDGRD( :,1 ) )
 
-        LAT  = ADJUSTL( CMEDGRD( N,2 ) )  ! grid cell latitude
-        LON  = ADJUSTL( CMEDGRD( N,3 ) )  ! grid cell longitude
+        LON  = ADJUSTL( CMEDGRD( N,2 ) )  ! grid cell longitude
+        LAT  = ADJUSTL( CMEDGRD( N,3 ) )  ! grid cell latitude
 
 C.........  Set all MEDS annual/avg to zero since all are daily/hourly inv
         READDATA = '0.0'
-
-C.........  Make sure routine knows it's been called already
-        FIRSTIME = .FALSE.
 
 C.........  Return from subroutine 
         RETURN

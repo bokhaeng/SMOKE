@@ -62,8 +62,9 @@ C...........   EXTERNAL FUNCTIONS and their descriptions:
         INTEGER                INDEX1
         INTEGER                STR2INT
         REAL                   UNITFAC 
+        LOGICAL                USEEXPGEO
 
-        EXTERNAL    CRLF, GETNLIST, INDEX1, STR2INT, UNITFAC
+        EXTERNAL    CRLF, GETNLIST, INDEX1, STR2INT, UNITFAC, USEEXPGEO
 
 C...........   SUBROUTINE ARGUMENTS
 C...........   NOTE that NDROP and EDROP are not used at present
@@ -145,6 +146,9 @@ C                   emissions
 C.............  Check for country name
             ELSE IF ( BUFFER(2:8) .EQ. 'COUNTRY' ) THEN 
 
+C.................  Skip country header if using expanded geographic codes
+                IF ( USEEXPGEO() ) RETURN
+
                 IF( L1 < 1 ) L1 = 8 
 
                 CNTRY = ADJUSTL( LINE( L1+1:L2 ) )
@@ -166,7 +170,7 @@ C.............  Check for country name
 
                 END IF
 
-                ICC   = CTRYCOD( I ) / 100000
+                ICC   = STR2INT( CTRYCOD( I ) ) / 100000
 
 C.............  Check for inventory year
             ELSE IF ( BUFFER(2:5) .EQ. 'YEAR' ) THEN 
@@ -319,23 +323,21 @@ C........................  Look for variable in Inventory Pollutant codes
 
 C.......................   If pollutant is not "kept", then take it
 C                          out of the count and the list
-                        IF ( ITKEEPA( COD ) ) THEN
+                        IF( COD .GT. 0 ) THEN
+                            IF( .NOT. ITKEEPA( COD ) ) CYCLE
+                            COD = INDEX1( ITNAMA(COD), MXIDAT, INVDNAM )
+                            DATPOS( V ) = COD
 
-                            IF( COD .GT. 0 ) THEN
-                                COD = INDEX1( ITNAMA(COD), MXIDAT, INVDNAM )
-                                DATPOS( V ) = COD
+                            NFINAL = NFINAL + 1
+                            TMPNAM( NFINAL ) = CVAR
 
-                                NFINAL = NFINAL + 1
-                                TMPNAM( NFINAL ) = CVAR
-
-C.............................  If not found in list of names or codes, then error
-                            ELSE
-                                EOS = 1
-                                MESG = 'ERROR: Data variable "' // 
-     &                               CVAR( 1:L )// '" not in master '//
-     &                               'data variable list!'
-                                CALL M3MSG2( MESG )
-                            END IF
+C.........................  If not found in list of names or codes, then error
+                        ELSE
+                            EOS = 1
+                            MESG = 'ERROR: Data variable "' // 
+     &                           CVAR( 1:L )// '" not in master '//
+     &                           'data variable list!'
+                            CALL M3MSG2( MESG )
                         END IF
 
 C.....................  Variable found in SMOKE names

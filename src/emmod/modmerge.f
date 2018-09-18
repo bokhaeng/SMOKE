@@ -332,7 +332,7 @@
         INTEGER, PUBLIC :: EDATE  = 0     ! Julian end date
         INTEGER, PUBLIC :: ETIME  = 0     ! end time of episode
         INTEGER, PUBLIC :: NSTEPS = 1     ! number of time loop iterations
-        INTEGER, PUBLIC :: TSTEP  = 10000 ! hourly time steps
+        INTEGER, PUBLIC :: TSTEP  = 0     ! hourly time steps
         INTEGER, PUBLIC :: TZONE  = -1    ! time zone
         INTEGER, PUBLIC :: BYEAR  = 0     ! base inventory year
         INTEGER, PUBLIC :: PYEAR  = 0     ! projected inventory year
@@ -357,9 +357,10 @@
 
 !.........  INPUT ARRAYS ...
 !.........  Country/State/County codes
-        INTEGER, ALLOCATABLE, PUBLIC :: AIFIP( : )    ! area codes, dim: nasrc
-        INTEGER, ALLOCATABLE, PUBLIC :: MIFIP( : )    ! mobile codes, dim: nmsrc
-        INTEGER, ALLOCATABLE, PUBLIC :: PIFIP( : )    ! point codes, dim: npsrc
+        INTEGER,            ALLOCATABLE, PUBLIC :: MCFIP( : ) ! mobile code idex for Movesmrg
+        CHARACTER(FIPLEN3), ALLOCATABLE, PUBLIC :: AIFIP( : ) ! area codes, dim: nasrc
+        CHARACTER(FIPLEN3), ALLOCATABLE, PUBLIC :: MIFIP( : ) ! mobile codes, dim: nmsrc
+        CHARACTER(FIPLEN3), ALLOCATABLE, PUBLIC :: PIFIP( : ) ! point codes, dim: npsrc
 
 !.........  Emissions (either inventory or hourly)
         REAL   , ALLOCATABLE, PUBLIC :: AEMSRC( :,: ) ! area: nasrc, mxpolpgp

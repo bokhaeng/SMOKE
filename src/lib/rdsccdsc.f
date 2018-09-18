@@ -95,7 +95,7 @@ C.........  Deallocate SCCDLEV if it was allocated
 C.........  Allocate memory for the SCC descriptions and initialize
         ALLOCATE( SCCDESC( NINVSCC ), STAT=IOS )
         CALL CHECKMEM( IOS, 'SCCDESC', PROGNAME )
-        ALLOCATE( SCCDLEV( NINVSCC, NSCCLV3 ), STAT=IOS )
+        ALLOCATE( SCCDLEV( NINVSCC, NSCCLV3-1 ), STAT=IOS )
         CALL CHECKMEM( IOS, 'SCCDLEV', PROGNAME )
 
         SCCDESC = 'Description unavailable'          ! array
@@ -144,7 +144,7 @@ C                   inventory, store the description.
                 END IF
    
             ELSE IF( FFLAG ) THEN
-                TSCC = LINE( 1:SCCLEN3 )
+                TSCC = LINE( 1:SCCLEN3-SCCEXPLEN3 )
                 CALL PADZERO( TSCC )
 
 C.................  Find SCC in inventory list, and if it's in the
@@ -152,7 +152,7 @@ C                   inventory, store the description.
                 J = FINDC( TSCC, NINVSCC, INVSCC )
 
                 IF ( J .GT. 0 ) THEN
-                    SCCDESC( J ) = ADJUSTL( LINE( SCCLEN3+1:ENDLEN ) )
+                    SCCDESC( J ) = ADJUSTL( LINE( SCCLEN3-SCCEXPLEN3+1:ENDLEN ) )
                 END IF
 
             ELSE
@@ -179,9 +179,9 @@ C                   the parts of the SCCs for the different levels
 
 C.....................  Get out of loop after 2nd-to-last - all other semi-colons
 C                       are included in final section of name
-                    IF( P == NSCCLV3-1 ) EXIT
+                    IF( P == NSCCLV3-2 ) EXIT
                 END DO
-                SCCDLEV( J,NSCCLV3 ) = L
+                SCCDLEV( J,NSCCLV3-1 ) = L
             END IF
 
         END DO

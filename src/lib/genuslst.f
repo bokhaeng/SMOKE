@@ -38,13 +38,13 @@ C***************************************************************************
 
 C.........  MODULES for public variables
 C.........  This module contains the inventory arrays
-        USE MODSOURC, ONLY: CSOURC, IFIP, CSCC, ISIC, CINTGR, CMACT, 
+        USE MODSOURC, ONLY: CSOURC, CIFIP, CSCC, CISIC, CINTGR, CMACT, 
      &                      CORIS, CBLRID, CPDESC, CNAICS, CVTYPE
 
 C.........  This module contains the lists of unique source characteristics
         USE MODLISTS, ONLY: NINVIFIP, NINVSCC, NINVSCL, NINVSIC, 
      &                      NINVSIC2, NINVMACT, NINVORIS, 
-     &                      INVIFIP, INVCFIP, INVSCC, INVSCL, INVSIC,
+     &                      INVCFIP, INVSCC, INVSCL, INVSIC,
      &                      INVSIC2, INVMACT, INVORIS,
      &                      INVORFP, IORSMTCH, INVODSC, ORISBLR,
      &                      OBSRCBG, OBSRCNT, NORISBLR, NOBLRSRC,
@@ -64,7 +64,7 @@ C...........   EXTERNAL FUNCTIONS and their descriptions:
         CHARACTER(2)    CRLF
         INTEGER         FINDC
         INTEGER         INDEX1
-        LOGICAL         SETSCCTYPE
+        LOGICAL         SETSCCTYPE, CHKEXPSCC, CHKEXPSIC
         
         EXTERNAL        CRLF, FINDC, INDEX1, SETSCCTYPE
 
@@ -74,31 +74,26 @@ C...........   Sorting index
 C...........   Local allocateable arrays for ORIS lists
         INTEGER, ALLOCATABLE :: FOIDXA  ( : )  ! sorting index for oris
         INTEGER, ALLOCATABLE :: OBIDXA  ( : )  ! sorting index for oris//blr
-        INTEGER, ALLOCATABLE :: INVORFPA( : )  ! FIPS code for ORIS IDs
         INTEGER, ALLOCATABLE :: OBSRCNTA( : )  ! unsrtd src count per ORIS/boiler
 
         CHARACTER(ORSLEN3), ALLOCATABLE :: INVORISA( : )  ! ORIS
+        CHARACTER(FIPLEN3), ALLOCATABLE :: INVORFPA( : )  ! FIPS code for ORIS IDs
         CHARACTER(OBRLEN3), ALLOCATABLE :: ORISBLRA( : )  ! ORIS // boiler
         CHARACTER(DSCLEN3), ALLOCATABLE :: INVODSCA( : ) ! plant description from inventory
 
 C...........   Other local variables
-        INTEGER          I, J, J1, J2, L1, L2, N, NS, S
+        INTEGER          I, J, J1, L1, L2, N, NS, S
+        INTEGER       :: J2 = 0
         INTEGER          IOS                 ! allocate i/o status
-        INTEGER          FIP                 ! current cntry/st/co code
-        INTEGER          PFIP                ! previous iteration cntry/st/co 
-        INTEGER          PSIC                ! previous iteration SIC 
-        INTEGER          PSIC2               ! previous iteration 2-digit SIC 
-        INTEGER          SIC                 ! tmp SIC 
-        INTEGER          SIC2                ! tmp 2-digit SIC 
 
         LOGICAL       :: EFLAG    = .FALSE.  ! true: error has occurred
         LOGICAL, SAVE :: FIRSTIME = .TRUE.   ! true: first call to subroutine
         LOGICAL, SAVE :: FIRSTORS = .TRUE.   ! true: first run of ORIS arrays
         LOGICAL          SCCFLAG             ! true: SCC type is different from previous
 
-        CHARACTER(10)      FIPFMT        ! format to write FIP to CFIP
         CHARACTER(300)     MESG          ! message buffer
-        CHARACTER(FIPLEN3) CFIP          ! tmp fip for mesage
+        CHARACTER(FIPLEN3) CFIP          ! current cntry/st/co code
+        CHARACTER(FIPLEN3) PCFIP        ! previous iteration cntry/st/co
         CHARACTER(VTPLEN3) PVTYP         ! previous vehicle type
         CHARACTER(VTPLEN3) TVTYP         ! tmp vehicle type
         CHARACTER(SCCLEN3) PSCC          ! previous iteration SCC
@@ -106,7 +101,9 @@ C...........   Other local variables
         CHARACTER(SCCLEN3) SCCL          ! tmp left SCC
         CHARACTER(SCCLEN3) TSCC          ! tmp SCC
         CHARACTER(SICLEN3) CSIC          ! tmp char SIC
+        CHARACTER(SICLEN3) CSIC2         ! tmp 2-digit SIC
         CHARACTER(SICLEN3) PCSIC         ! previous char SIC
+        CHARACTER(SICLEN3) PCSIC2        ! previous 2-char SIC
         CHARACTER(MACLEN3) TMACT         ! tmp char MACT code
         CHARACTER(MACLEN3) PMACT         ! previous char MACT code
         CHARACTER(NAILEN3) TNAICS        ! tmp char NAICS code
@@ -136,49 +133,42 @@ C.............  Allocate memory for sorting index
             ALLOCATE( INDX( NSRC ), STAT=IOS )
             CALL CHECKMEM( IOS, 'INDX', PROGNAME )
 
-C.............  Check if IFIP is allocated.  
+C.............  Check if CIFIP is allocated.  
 C.............  If it is, generate unique list of country/state/county codes
-            IF( ASSOCIATED( IFIP ) ) THEN
-
-C.................  Create the FIP code format string
-                WRITE( FIPFMT, '("(I",I2.2,".",I2.2,")")' ) 
-     &                 FIPLEN3, FIPLEN3
+            IF( ASSOCIATED( CIFIP ) ) THEN
 
 C.................  Count number of unique codes
-                PFIP = IMISS3
+                PCFIP = ' '
                 J1 = 0
                 DO S = 1, NSRC
  
-                    FIP = IFIP( S )
-                    IF( FIP .NE. PFIP ) J1 = J1 + 1
-                    PFIP = FIP
+                    CFIP = CIFIP( S )
+                    IF( CFIP .NE. PCFIP ) J1 = J1 + 1
+                    PCFIP = CFIP
 
                 END DO
                 NINVIFIP = J1
 
 C.................  Allocate memory for country/state/county lists
-                ALLOCATE( INVIFIP( NINVIFIP ), STAT=IOS )
-                CALL CHECKMEM( IOS, 'INVIFIP', PROGNAME )
                 ALLOCATE( INVCFIP( NINVIFIP ), STAT=IOS )
                 CALL CHECKMEM( IOS, 'INVCFIP', PROGNAME )
+                INVCFIP = ''
 
 C.................  Create unique country/state/county codes list
-                PFIP = IMISS3
+                PCFIP = ' '
                 J1 = 0
                 DO S = 1, NSRC
  
-                    FIP = IFIP( S )
-                    WRITE( CFIP,FIPFMT ) FIP
-                    IF( FIP .NE. PFIP ) THEN
+                    CFIP = CIFIP( S )
+                    IF( CFIP .NE. PCFIP ) THEN
                         J1 = J1 + 1
-                        INVIFIP( J1 ) = FIP
                         INVCFIP( J1 ) = CFIP
-                        PFIP = FIP
+                        PCFIP = CFIP
                     END IF
 
                 END DO
 
-            END IF   ! End of IFIP allocated or not
+            END IF   ! End of CIFIP allocated or not
 
 C.............  Check if CVTYPE is allocated
 C.............  If it is, generate unique list of vehicle types
@@ -280,6 +270,9 @@ C.....................  Set type of SCC
                         PSCC = TSCC
                     END IF
 
+C.....................  Don't include expanded SCCs in left SCC list
+                    IF( CHKEXPSCC( TSCC ) ) CYCLE
+
                     IF( SCCL .NE. PSCCL ) THEN
                         J2 = J2 + 1
                         INVSCL( J2 ) = SCCL
@@ -291,10 +284,9 @@ C.....................  Set type of SCC
             END IF   ! End SCC processing
             NINVSCL =  J2
 
-C.............  Check if ISIC is allocated.  
-C.............  If it is, generate unique list of SICs, and generate list of
-C               where which SCCs go with which SICs
-            IF( ASSOCIATED( ISIC ) ) THEN
+C.............  Check if CISIC is allocated.  
+C.............  If it is, generate unique list of SICs
+            IF( ASSOCIATED( CISIC ) ) THEN
 
 C.................  Initialize SIC sorting index     
                 DO S = 1, NSRC
@@ -302,64 +294,61 @@ C.................  Initialize SIC sorting index
                 END DO
 
 C.................  Sort all SICs in the inventory in increasing order
-                CALL SORTI1( NSRC, INDX, ISIC )
+                CALL SORTIC( NSRC, INDX, CISIC )
 
-C.................  Count number of unique SICs and number of unique
-C                   2-digit SICs
-                PSIC  = -9
-                PSIC2 = -9
+C.................  Count number of unique SICs
+                PCSIC = '-9'
                 J1 = 0
-                J2 = 0
                 DO S = 1, NSRC
 
                     J = INDX( S )
+                    
+                    CSIC = CISIC( J )
+                    
+                    IF( CSIC .NE. PCSIC ) J1 = J1 + 1
 
-                    SIC  = ISIC( J )
-                    SIC2 = SIC/100
-
-                    IF( SIC  .NE. PSIC  ) J1 = J1 + 1
-                    IF( SIC2 .NE. PSIC2 ) J2 = J2 + 1 
-
-                    PSIC  = SIC
-                    PSIC2 = SIC2
+                    PCSIC = CSIC
 
                 END DO 
-                NINVSIC  = J1
-                NINVSIC2 = J2
+                NINVSIC = J1
 
 C.................  Allocate memory for SIC lists
                 ALLOCATE( INVSIC( NINVSIC ), STAT=IOS )
                 CALL CHECKMEM( IOS, 'INVSIC', PROGNAME )
-                ALLOCATE( INVSIC2( NINVSIC2 ), STAT=IOS )
-                CALL CHECKMEM( IOS, 'INVSIC2', PROGNAME )
+                ALLOCATE( INVSIC2( NINVSIC ), STAT=IOS )
+                CALL CHECKMEM( IOS,' INVSIC2', PROGNAME )
 
-C.................  Create unique SIC list
-                PSIC  = -9
-                PSIC2 = -9
+C.................  Create unique SIC lists
+                PCSIC = '-9'
+                PCSIC2 = '-9'
                 J1 = 0
                 J2 = 0
                 DO S = 1, NSRC
 
                     J = INDX( S )
 
-                    SIC = ISIC( J )
-                    SIC2 = SIC/100
+                    CSIC = CISIC( J )
+                    CSIC2 = CSIC( 1:SICLEN3-2 )
 
-                    IF( SIC .NE. PSIC ) THEN
+                    IF( CSIC .NE. PCSIC ) THEN
                         J1 = J1 + 1
-                        INVSIC( J1 ) = SIC
-                        PSIC = SIC
+                        INVSIC( J1 ) = CSIC
+                        PCSIC = CSIC
                     END IF
 
-                     IF( SIC2 .NE. PSIC2 ) THEN
+C.....................  Don't include expanded SICs in 2-digit SIC list
+                    IF( CHKEXPSIC( CSIC ) ) CYCLE
+
+                    IF( CSIC2 .NE. PCSIC2 ) THEN
                         J2 = J2 + 1
-                        INVSIC2( J2 ) = SIC2
-                        PSIC2 = SIC2
+                        INVSIC2( J2 ) = CSIC2
+                        PCSIC2 = CSIC2
                     END IF
 
                END DO 
 
             END IF   ! End SIC processing
+            NINVSIC2 = J2
 
 C.............  Check if CMACT is allocated.  
 C.............  If it is, generate unique list of MACT codes
@@ -541,7 +530,7 @@ C.............  Store arrays
             PBLID    = ' '
             DO S = 1, NSRC
 
-                FIP  = IFIP  ( S )
+                CFIP = CIFIP ( S )
                 CORS = CORIS ( S )
                 BLID = CBLRID( S )
                 PDSC = CPDESC( S )
@@ -557,11 +546,10 @@ C.................  Unsorted ORIS arrays
                         NINVORIS = NINVORIS + 1
                         FOIDXA  ( NINVORIS ) = NINVORIS
                         INVORISA( NINVORIS ) = CORS
-                        INVORFPA( NINVORIS ) = FIP
+                        INVORFPA( NINVORIS ) = CFIP
                         INVODSCA( NINVORIS ) = PDSC
                     ELSE
-                        IF( INVORFPA( J ) /= FIP ) THEN
-                            WRITE( CFIP, '(I5)' ) INVORFPA( J )
+                        IF( INVORFPA( J ) /= CFIP ) THEN
                        	    MESG = 'WARNING: Different FIPS codes ' //
      &                            'found for ORIS ID ' // CORS
      &                            // '.  Will use ' // CFIP //

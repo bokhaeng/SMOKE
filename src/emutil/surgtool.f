@@ -70,12 +70,13 @@ C...........   EXTERNAL FUNCTIONS and their descriptions:
         CHARACTER(2)    CRLF
         LOGICAL         DSCM3GRD
         INTEGER         PROMPTFFILE
+        INTEGER         STR2INT
         
-        EXTERNAL   CRLF, DSCM3GRD, PROMPTFFILE
+        EXTERNAL   CRLF, DSCM3GRD, PROMPTFFILE, STR2INT
 
 C...........   LOCAL PARAMETERS
         CHARACTER(50), PARAMETER :: 
-     &  CVSW = '$Name$' ! CVS release tag
+     &  CVSW = '$Name SMOKEv4.6_Sep2018$' ! CVS release tag
 
 C............   Allocatable arrays for computing grid cell intersections
         INTEGER, ALLOCATABLE::   C2( :, : )     !  output grid cell
@@ -459,7 +460,7 @@ C               any output cells
 
                 INDXA( OUTNSRG ) = OUTNSRG
                 CELLA( OUTNSRG ) = C2( COL,ROW )
-                FIPSA( OUTNSRG ) = SFIPSA ( K )
+                FIPSA( OUTNSRG ) = STR2INT( SFIPSA ( K ) )
                 SSCSA( OUTNSRG ) = SSRGIDA( K )
                 FRACA( OUTNSRG ) = SFRACA ( K )
 

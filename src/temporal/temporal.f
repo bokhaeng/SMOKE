@@ -37,7 +37,7 @@ C
 C smoke@unc.edu
 C
 C Pathname: $Source$
-C Last updated: $Date$
+C Last updated: $Date$ 
 C
 C*************************************************************************
 
@@ -47,7 +47,7 @@ C.........  This module contains the inventory arrays
 
 C.........  This module contains the temporal profile tables
         USE MODTMPRL, ONLY: NMON, NWEK, NHRL, STDATE, STTIME, RUNLEN,
-     &                      ITDATE, METPROFLAG, METPROTYPE, IPOL2D
+     &                      ITDATE, METPROFLAG, METPROTYPE, IPOL2D, LTFLAG
 
 C.........  This module contains emission factor tables and related
         USE MODEMFAC, ONLY: EMTPOL, NEPOL, TEMPEF, USETIME
@@ -56,10 +56,11 @@ C.........  This module contains data for day- and hour-specific data
         USE MODDAYHR, ONLY: DYPNAM, DYPDSC, NDYPOA, NDYSRC,
      &                      HRPNAM, HRPDSC, NHRPOA, NHRSRC,
      &                      LDSPOA, LHSPOA, LHPROF,
-     &                      INDXD, EMACD, INDXH, EMACH
+     &                      INDXD, EMACD, INDXH, EMACH,
+     &                      EMAC, EMACV, EMIST, EMFAC, TMAT
 
 C.........  This module contains the lists of unique source characteristics
-        USE MODLISTS, ONLY: NINVIFIP, INVIFIP, MXIDAT, INVDNAM, INVDVTS
+        USE MODLISTS, ONLY: NINVIFIP, INVCFIP, MXIDAT, INVDNAM, INVDVTS
 
 C.........  This module contains the information about the source category
         USE MODINFO, ONLY: CATEGORY, BYEAR, NIPPA, EANAM, NSRC,
@@ -95,23 +96,15 @@ C..........  EXTERNAL FUNCTIONS and their descriptions:
         INTEGER         RDTPROF
         INTEGER         SECSDIFF
         INTEGER         STR2INT
+        LOGICAL         USEEXPGEO
 
         EXTERNAL    CHKINT, CRLF, ENVINT, ENVYN, FINDC, JULIAN,
      &              GETDATE, GETFLINE, GETNUM, INDEX1, ISDSTIME, MMDDYY,
-     &              PROMPTFFILE, RDTPROF, SECSDIFF, STR2INT
+     &              PROMPTFFILE, RDTPROF, SECSDIFF, STR2INT, USEEXPGEO
 
 C.........  LOCAL PARAMETERS and their descriptions:
 
-        CHARACTER(50), PARAMETER :: CVSW = '$Name$'  ! CVS revision tag
-
-C.........  Emission arrays
-        REAL   , ALLOCATABLE :: EMAC ( :,: ) !  inven emissions or activities
-        REAL   , ALLOCATABLE :: EMACV( :,: ) !  day-adjst emis or activities
-        REAL   , ALLOCATABLE :: EMIST( :,: ) !  timestepped output emssions
-        REAL   , ALLOCATABLE :: EMFAC( :,: ) !  mobile emission factors by source
-
-C.........  Temporal allocation Matrix.
-        REAL, ALLOCATABLE :: TMAT( :, :, : ) ! temporal allocation factors
+        CHARACTER(50), PARAMETER :: CVSW = '$Name SMOKEv4.6_Sep2018$'  ! CVS revision tag
 
 C.........  Array that contains the names of the inventory variables needed for
 C           this program
@@ -138,19 +131,13 @@ C.........  Reshaped input variables and output variables
 C...........   Logical names and unit numbers
 
         INTEGER      :: CDEV = 0!  unit number for region codes file
-        INTEGER      :: EDEV = 0!  unit number for ef file list
         INTEGER      :: HDEV = 0!  unit number for holidays file
         INTEGER         KDEV    !  unit number for time periods file
         INTEGER         LDEV    !  unit number for log file
-        INTEGER      :: MDEV = 0!  unit number for mobile codes file
         INTEGER         PDEV    !  unit number for supplemental tmprl file
-        INTEGER         RDEV    !  unit number for temporal profile file
         INTEGER         SDEV    !  unit number for ASCII inventory file
-        INTEGER         TDEV    !  unit number for emission processes file
-        INTEGER         XDEV    !  unit no. for cross-reference file
 
         CHARACTER(16) :: ANAME = ' '    !  logical name for ASCII inven input
-        CHARACTER(16) :: GNAME = ' '    !  ungridding matrix
         CHARACTER(16) :: DNAME = 'NONE' !  day-specific  input file, or "NONE"
         CHARACTER(16) :: ENAME = ' '    !  logical name for I/O API inven input
         CHARACTER(16) :: FNAME = ' '    !  emission factors file
@@ -208,7 +195,6 @@ C...........   Other local variables
         LOGICAL         ENDFLAG             !  true: couldn't find file end date
         LOGICAL      :: FNDOUTPUT = .FALSE. ! true: found output hydrocarbon
         LOGICAL         HFLAG               !  true: hour-specific file available
-        LOGICAL         MFLAG               !  true: mobile codes file available
         LOGICAL         NFLAG               !  true: use all uniform temporal profiles
         LOGICAL         PFLAG               !  true: episode time periods needed
         LOGICAL         WFLAG               !  true: write QA on current time step
@@ -243,6 +229,10 @@ C.........  Obtain settings from the environment...
 C.........  Get the time zone for output of the emissions
         TZONE = ENVINT( 'OUTZONE', 'Output time zone', 0, IOS )
 
+C.........  Output hourly emission in Local Time.
+        MESG = 'Outputs hourly emissions in local time  (No time shift)'
+        LTFLAG = ENVYN( 'OUTPUT_LOCAL_TIME', MESG, .FALSE., IOS )
+
 C.........  Get environment variable that overrides temporal profiles and
 C               uses only uniform profiles.
         NFLAG = ENVYN( 'UNIFORM_TPROF_YN', MESG, .FALSE., IOS )
@@ -265,19 +255,17 @@ C.........  Prompt for and open input files
 C.........  Also, store source-category specific information in the MODINFO
 C           module.
         CALL OPENTMPIN( NFLAG, PFLAG, ENAME, ANAME, DNAME,
-     &                  HNAME, GNAME, SDEV, XDEV, RDEV, CDEV, HDEV,
-     &                  KDEV, TDEV, MDEV, EDEV, PYEAR )
+     &                  HNAME, SDEV, CDEV, HDEV, KDEV, PYEAR )
 
 C.........  Determine status of some files for program control purposes
         DFLAG = ( DNAME .NE. 'NONE' )  ! Day-specific emissions
         HFLAG = ( HNAME .NE. 'NONE' )  ! Hour-specific emissions
-        MFLAG = ( MDEV  .NE. 0 )       ! Use mobile codes file
 
 C.........  Get length of inventory file name
         ENLEN = LEN_TRIM( ENAME )
 
 C.........  Set inventory variables to read for all source categories
-        IVARNAMS( 1 ) = 'IFIP'
+        IVARNAMS( 1 ) = 'CIFIP'
         IVARNAMS( 2 ) = 'TZONES'
         IVARNAMS( 3 ) = 'TPFLAG'
         IVARNAMS( 4 ) = 'CSCC'
@@ -324,18 +312,27 @@ C.........  Adjust TZMIN and TZMAX for possibility of daylight savings
         TZMAX = TZMAX + 1
 
 C.........  Read special files...
-
 C.........  Read region codes file
-        CALL RDSTCY( CDEV, NINVIFIP, INVIFIP )
+        IF( USEEXPGEO() ) THEN
+            CALL RDGEOCODES( NINVIFIP, INVCFIP )
+        ELSE
+            CALL RDSTCY( CDEV, NINVIFIP, INVCFIP )
+        END IF
 
 C.........  Populate filter for sources that use daylight time
         CALL SETDAYLT
 
+C.........  Output hourly emissions in local time
+        IF( LTFLAG ) THEN
+            FLTRDAYL = 0         ! reset daily light saving value to zero
+            TZONE  = 0           ! reset output time zone to zero
+            TZONES = 0           ! reset county-specific time zone to zero
+            TZMIN  = 0
+            TZMAX  = 0
+        END IF
+
 C.........  Read holidays file
         CALL RDHDAYS( HDEV, EARLST, LATEST )
-
-C.........  When mobile codes file is being used read mobile codes file
-        IF( MFLAG ) CALL RDMVINFO( MDEV )
 
 C.........  Determine all of the variables to be output based on the
 C           activities and input pollutants.
@@ -578,16 +575,6 @@ C           divide pollutants into even groups and try again.
         NGSZ = NIPPA            ! No. of pollutant & emis types in each group
         NGRP = 1                ! Number of groups
 
-C.........  Make sure total array size is not larger than maximum
-        DO
-            IF( NSRC*NGSZ*24 >= 1024*1024*1024 ) THEN
-                NGRP = NGRP + 1
-                NGSZ = ( NIPPA + NGRP - 1 ) / NGRP
-            ELSE
-                EXIT
-            END IF
-        END DO
-
         DO
 
             ALLOCATE( TMAT ( NSRC, NGSZ, 24 ),
@@ -678,9 +665,6 @@ C.........  Earliest day is start time in maximum time zone
         CALL NEXTIME( EARLYDATE, EARLYTIME,
      &               -( TZMAX - TZONE )*10000 )
 
-C.........  If time is before 6 am, need previous day also
-C bbh        IF( EARLYTIME < 60000 ) EARLYDATE = EARLYDATE - 1
-
 C.........  Latest day is end time in minimum time zone
         EDATE = SDATE
         ETIME = STIME
@@ -690,8 +674,6 @@ C.........  Latest day is end time in minimum time zone
         LATETIME = ETIME
         CALL NEXTIME( LATEDATE, LATETIME,
      &               -( TZMIN - TZONE )*10000 )
-C.........  If time is before 6 am, don't need last day
-C bbh        IF( LATETIME < 60000 ) LATEDATE = LATEDATE - 1
 
         NDAYS = SECSDIFF( EARLYDATE, 0, LATEDATE, 0 ) / ( 24*3600 )
         NDAYS = NDAYS + 1
@@ -840,18 +822,10 @@ C                   to not get daylight time conversion.
                     DAYLIT = .TRUE.
                     TZONES = TZONES - 1 * FLTRDAYL   ! arrays
 
-C bbh                    DO IS = 1,NSRC
-C bbh                        IF( TZONES( IS ) < 0 ) TZONES( IS ) = 23
-C bbh                    ENDDO
-
                 ELSE IF( .NOT. ISDSTIME( JDATE ) .AND. DAYLIT ) THEN
 
                     DAYLIT = .FALSE.
                     TZONES = TZONES + 1 * FLTRDAYL   ! arrays
-
-C bbh                    DO IS = 1,NSRC
-C bbh                        IF( TZONES( IS ) > 23 ) TZONES( IS ) = 0
-C bbh                    ENDDO
 
                 END IF
 
@@ -859,7 +833,7 @@ C.................  Generate and write hourly emissions for current hour
 
                 CALL GENHEMIS( N, NGRP, NGSZ, JDATE, JTIME, TZONE, DNAME, HNAME,
      &                  PNAME, ALLIN2D( 1,N ), EANAM2D( 1,N ), EAREAD2D,
-     &                  EMAC, EMFAC, EMACV, TMAT, EMIST, LDATE )
+     &                  LDATE )
 
                 DO I = 1, NGSZ      !  Loop through pollutants/emission-types in this group
                                     !  Skip blanks that can occur when NGRP > 1

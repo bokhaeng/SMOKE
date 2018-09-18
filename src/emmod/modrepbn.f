@@ -79,18 +79,24 @@
 
         REAL   , ALLOCATABLE, PUBLIC :: OUTGFAC( : )  ! gridding factor or 1.
 
+!.........  Sparse bin-aggregation matrix:
+!.........  uses zero-based, cumulative-count NBINS
+
+        INTEGER, ALLOCATABLE, PUBLIC :: NBINS( : )  ! ( 0:NOUTBINS ): cumulative record-counts for BINDATA calculation
+        INTEGER, ALLOCATABLE, PUBLIC :: ISRCB( : )  ! ( NOUTREC )   : sources for      "
+        REAL   , ALLOCATABLE, PUBLIC :: GFACB( : )  ! ( NOUTREC )   : grid-factors for "
+
 !.........  Scalar values for data bins
         INTEGER, PUBLIC :: NOUTBINS = 0  ! no. of output bins
 
 !.........  Grouped output information and data values
         INTEGER, ALLOCATABLE, PUBLIC :: BINBAD   ( : )   ! code number if something wrong
+        INTEGER, ALLOCATABLE, PUBLIC :: BINGEO1IDX( : )  ! index to geocode level 1 name
         INTEGER, ALLOCATABLE, PUBLIC :: BINCOIDX ( : )   ! index to country name
         INTEGER, ALLOCATABLE, PUBLIC :: BINCYIDX ( : )   ! index to county name
-        INTEGER, ALLOCATABLE, PUBLIC :: BINREGN  ( : )   ! region code
         INTEGER, ALLOCATABLE, PUBLIC :: BINRCL   ( : )   ! roadclass code
         INTEGER, ALLOCATABLE, PUBLIC :: BINSMKID ( : )   ! SMOKE source ID
         INTEGER, ALLOCATABLE, PUBLIC :: BINSNMIDX( : )   ! SCC name index
-        INTEGER, ALLOCATABLE, PUBLIC :: BINSIC   ( : )   ! SIC 
         INTEGER, ALLOCATABLE, PUBLIC :: BINSTKGRP( : )   ! stack group ID 
         INTEGER, ALLOCATABLE, PUBLIC :: BINSICIDX( : )   ! SIC name index
         INTEGER, ALLOCATABLE, PUBLIC :: BINMACIDX( : )   ! MACT name index
@@ -106,8 +112,10 @@
         REAL   , ALLOCATABLE, PUBLIC :: BINDATA  ( :,: ) ! output data values
 
         CHARACTER, ALLOCATABLE, PUBLIC :: BINELEV( : )! elevated flag
+        CHARACTER(FIPLEN3), ALLOCATABLE, PUBLIC :: BINREGN  ( : ) ! region code
         CHARACTER(PLTLEN3), ALLOCATABLE, PUBLIC :: BINPLANT ( : ) ! Plant ID
         CHARACTER(SCCLEN3), ALLOCATABLE, PUBLIC :: BINSCC   ( : ) ! SCC
+        CHARACTER(SICLEN3), ALLOCATABLE, PUBLIC :: BINSIC   ( : ) ! SIC
         CHARACTER(INTLEN3), ALLOCATABLE, PUBLIC :: BININTGR ( : ) ! INTEGRATE
         CHARACTER(MACLEN3), ALLOCATABLE, PUBLIC :: BINMACT  ( : ) ! MACT
         CHARACTER(NAILEN3), ALLOCATABLE, PUBLIC :: BINNAICS ( : ) ! NAICS
@@ -125,6 +133,7 @@
         CHARACTER(TMPLEN3), ALLOCATABLE, PUBLIC :: BINSATID ( : ) ! Saturday hourly prof
         CHARACTER(TMPLEN3), ALLOCATABLE, PUBLIC :: BINSUNID ( : ) ! Sunday hourly prof
         CHARACTER(TMPLEN3), ALLOCATABLE, PUBLIC :: BINMETID ( : ) ! met-based hourly prof
+        CHARACTER(ERPLEN3), ALLOCATABLE, PUBLIC :: BINERPTYP( : ) ! emissions release point type
 
 !.........  Arrays for determining output from emission types to report columns
 !.........  Dimensioned ( NIPPA, NREPORT )

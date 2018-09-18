@@ -61,8 +61,9 @@ C...........   EXTERNAL FUNCTIONS and their descriptions:
         CHARACTER(2)    CRLF
         INTEGER         ENVINT
         INTEGER         FIND1  
+        INTEGER         FINDC
 
-        EXTERNAL   CRLF, ENVINT, FIND1
+        EXTERNAL   CRLF, ENVINT, FIND1, FINDC
 
 C...........   Subroutine arguments
         INTEGER, INTENT (IN) :: IDXINV
@@ -145,7 +146,7 @@ C.............  Divide surrogate value by sum on cell
                         WRITE( MESG,94010 )
      &                         'WARNING: Area surrogate is 0. for ' //
      &                         CRLF() // BLANK10 //
-     &                         'Country/state/county', SRGFIPS( F ),
+     &                         'Country/state/county' // SRGFIPS( F ) //
      &                         'and cell', C
                         CALL M3MSG2( MESG )
 
@@ -181,7 +182,7 @@ C.........  Loop through county codes and compute county total emissions
         DO J = 1, NCOUNTY
 
 C.............  Make sure county is in surrogates file
-            F = FIND1( CNTYCOD( J ), NSRGFIPS, SRGFIPS )
+            F = FINDC( CNTYCOD( J ), NSRGFIPS, SRGFIPS )
 
 C.............  Skip county if its not in surrogates file
             IF( F .LE. 0 ) CYCLE

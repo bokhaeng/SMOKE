@@ -1,7 +1,6 @@
 
-        SUBROUTINE GENHEMIS( IGRP, NGRP, NGSZ, JDATE, JTIME, TZONE, DNAME, HNAME,
-     &                       PNAME, NAMIN, NAMOUT, EAREAD2D, EMAC,
-     &                       EMFAC, EMACV, TMAT, EMIST, LDATE )
+        SUBROUTINE GENHEMIS( IGRP, NGRP, NGSZ, JDATE, JTIME, TZONE, DNAME,
+     &                       HNAME, PNAME, NAMIN, NAMOUT, EAREAD2D, LDATE )
 
 C***********************************************************************
 C  subroutine body starts at line 173
@@ -55,13 +54,14 @@ C.........  MODINFO contains the information about the source category
 
         USE MODSOURC, ONLY: TZONES, TPFLAG
 
-        USE MODXREF, ONLY: MDEX, WDEX, DDEX
+        USE MODXREF,  ONLY: MDEX, WDEX, DDEX
 
         USE MODTMPRL, ONLY: NHOLIDAY, HOLJDATE, HOLALTDY, HRLFAC, HRLPROF,
-     &                      METPROFLAG, METPROTYPE, METPROF, METFACS
+     &                      NMETPROF, METPROF, IPOL2D, HOUR_TPROF, LTFLAG
 
         USE MODDAYHR, ONLY: INDXD, INDXH, EMACD, EMACH, NDYSRC, NHRSRC,
-     &                      LDSPOA, LHSPOA, LHPROF
+     &                      LDSPOA, LHSPOA, LHPROF,
+     &                      EMAC, EMACV, EMIST, EMFAC, TMAT
 
         USE MODINFO, ONLY: NSRC, CATEGORY, NIPPA, EACNV
 
@@ -97,30 +97,23 @@ C...........   SUBROUTINE ARGUMENTS
         CHARACTER(*), INTENT (IN)    :: NAMIN ( NGSZ )      ! inv pol names
         CHARACTER(*), INTENT (IN)    :: NAMOUT( NGSZ )      ! inv pol names
         CHARACTER(*), INTENT (IN)    :: EAREAD2D( NIPPA )   ! tmp inv pol names
-        REAL        , INTENT (IN)    :: EMAC ( NSRC, NGSZ ) ! inv emis or actvty
-        REAL        , INTENT (IN)    :: EMFAC( NSRC, NGSZ ) ! emission factors
-        REAL        , INTENT (OUT)   :: EMACV( NSRC, NGSZ ) ! work emis/actvy
-        REAL        , INTENT (OUT)   :: TMAT ( NSRC, NGSZ, 24 ) ! tmprl matrix
-        REAL        , INTENT (OUT)   :: EMIST( NSRC, NGSZ )     ! hourly emis
         INTEGER     , INTENT (IN OUT):: LDATE                   ! reset previous
 
 C...........   TMAT update variables
 
-        INTEGER, SAVE :: NHRCALC             ! No. of entries in HRCALC
-        INTEGER, SAVE :: HRCALC( 24 )        ! List of GMT hrs for calc'g TMAT
-        INTEGER, SAVE :: MONTH ( 24, 0:23 )  ! time zone's month 1 ... 12
-        INTEGER, SAVE :: DAYOW ( 24, 0:23 )  ! time zone's day-of-week    1 ... 7
-        INTEGER, SAVE :: DAYOM ( 24, 0:23 )  ! time zone's day-of-month   1 ... 31
+        INTEGER, SAVE :: MONTH ( 24, -23:23 )  ! time zone's month 1 ... 12
+        INTEGER, SAVE :: DAYOW ( 24, -23:23 )  ! time zone's day-of-week    1 ... 7
+        INTEGER, SAVE :: DAYOM ( 24, -23:23 )  ! time zone's day-of-month   1 ... 31
 
         REAL, ALLOCATABLE, SAVE :: STHOUR( : )         ! episode start hour
         REAL, ALLOCATABLE, SAVE :: EDHOUR( : )         ! episode end hour
+        REAL, ALLOCATABLE       :: METVAL( : )         ! tmp met-based temporal factors
         REAL                    :: TMPHRLFAC( 24 )     ! tmp hourly factors
 
 C...........   Other local variables
 
         INTEGER          C, H, I, II, J, K, K1, K2, KK, L, M, S, V !  indices and counters
         INTEGER          IHR
-
         INTEGER, SAVE :: TZMIN   ! minimum time zone in inventory
         INTEGER, SAVE :: TZMAX   ! maximum time zone in inventory
 
@@ -133,6 +126,8 @@ C...........   Other local variables
         INTEGER          IOS        ! i/o status
         INTEGER, SAVE :: LTIME = -1 ! time used in previous subroutine call
         INTEGER          MON        ! tmp month number (1=Jan)
+        INTEGER          IMET       ! met-based profile ID by source
+        INTEGER          VIDX       ! tmp pollutant index for profile
         INTEGER          PIDX       ! tmp pollutant/activity index
         INTEGER          TDATE      ! date for computing time zones update arr
         INTEGER          TTIME      ! time for computing time zones update arr
@@ -140,6 +135,7 @@ C...........   Other local variables
         INTEGER          EPSEND     ! tmp episode end hour
 
         REAL             UFAC            ! tmp units conversion factor
+        REAL             TOT             ! tmp total value (denominator)
         REAL          :: NORMFAC   = 0.  ! normalizing factors for hourly factors
         REAL          :: SUMHRLFAC = 0.  ! tmp partial sum of hourly factors
         REAL          :: TOTHRLFAC = 0.  ! tmp sum of hourly factors
@@ -202,14 +198,11 @@ C.............  Adjust TZMIN and TZMAX for possibility of daylight savings
             TZMIN = TZMIN - 1
             TZMAX = TZMAX + 1
 
-C.............  Determine hours of output day in GMT for updating TMAT
-            NHRCALC = TZMAX - TZMIN + 1
-
-            K = 0
-            DO I = TZMIN, TZMAX
-                K = K + 1
-                HRCALC( K ) = MOD( I - TZONE + 25, 24 )
-            END DO
+C.............  Ouput hourly emissions in local time
+            IF( LTFLAG ) THEN
+                TZMIN = 0
+                TZMAX = 0
+            END IF
 
 C.............  Set flags for daily and hourly data
             DFLAG = ( DNAME .NE. 'NONE' )
@@ -270,6 +263,7 @@ C                       systems
                         CALL DAYMON( JDATE, MON, MDAY )
                         WDAY  = WKDAY( JDATE )
                         TDATE = JDATE                  ! set for holiday check
+
                     END IF
 
 C.....................  Check if the date is a holiday.  If so, reset the
@@ -343,20 +337,16 @@ C.............  Read start and ending hour(ENDHOUR) for wildfire processing
         END IF          ! if using day-specific emissions
 
 C.........  Set integer hour of day for output time
-
         HOUR = 1 + MOD( JTIME / 10000 , 24 )
 
 C.........  Determine if this TMAT needs to be updated
-
         TMATCALC = ( JDATE .NE. LDATE .OR. FIRSTSTP )
 
 C.........  Construct TMAT -- array of effective composite profile coefficients
-
         IF( TMATCALC ) THEN
 
-C.............  Build temporal allocation matrix
-            CALL MKTMAT( NSRC, IGRP, NGRP,  NGSZ, JDATE, JTIME, TZONE, TZONES,
-     &                   TPFLAG, MONTH, DAYOW, DAYOM, PNAME, TMAT )
+            CALL MKTMAT( NSRC, IGRP, NGRP, NGSZ, JDATE, JTIME, TZONE,
+     &                   MONTH, DAYOW, DAYOM, PNAME )
 
         END IF         ! if TMAT is to be calculated
 
@@ -422,7 +412,7 @@ C               matrix for the current hour
             IF( LHPROF( V ) ) THEN
 
                 CALL UPDTMAT( NSRC, IGRP, NGSZ, JDATE, TZONE, V,
-     &                        HOUR, MONTH, DAYOW, DAYOM, TMAT )
+     &                        HOUR, MONTH, DAYOW, DAYOM )
 
             END IF
 
@@ -430,9 +420,7 @@ C.............  For all pollutants and activities...
 
 C.............  Apply hourly factors to all sources for current pollutant or
 C               activity. Also apply units conversion.
-            DO S = 1, NSRC
-                EMIST( S,V ) = UFAC * EMACV( S,V ) * TMAT( S,V,HOUR )
-            END DO
+            EMIST( :,V ) = UFAC * EMACV( :,V ) * TMAT( :,V,HOUR )
 
 C.............  If day-specific data are available for current pollutant
             IF( LDSPOA( V ) .AND. RDFLAG ) THEN
@@ -519,11 +507,38 @@ C.........................  Re-normalizing hourly temporal factors
 
                         EMIST( S,V ) = UFAC * EMACD( I ) * TMPHRLFAC( K )
 
-                   ELSE       ! end of computing wildfires hourly emission factors
+                    ELSE       ! end of computing wildfires hourly emission factors
 
                         EMIST( S,V ) = UFAC * EMACD( I ) * HRLFAC( K,IHR )
 
-                   END IF
+                    END IF
+
+C....................  Apply hour-of-day Gentpro temporal profiles to daily inventory
+                    VIDX = IPOL2D( V,IGRP )
+                    IF( VIDX < 1 ) CYCLE
+                    IMET = METPROF( S,VIDX )
+
+                    IF( IMET > 0 .AND. HOUR_TPROF == 'DAY' ) THEN
+
+                        IF( ALLOCATED( METVAL ) ) DEALLOCATE( METVAL )
+                        ALLOCATE( METVAL( NMETPROF ), STAT = IOS )
+                        CALL CHECKMEM( IOS, 'METVAL', PROGNAME )
+                        METVAL = 0.0
+
+                        IF( .NOT. READ3( PNAME, 'DAYTOT', 1, JDATE, JTIME, METVAL ) ) THEN
+                            MESG = 'Could not read DAYTOT variable from ' // TRIM( PNAME )
+                            CALL M3EXIT( PROGNAME, JDATE, JTIME, MESG, 2 )
+                        END IF
+                        TOT = METVAL( IMET )
+
+                        IF( .NOT. READ3( PNAME, 'HRLSRC', 1, JDATE, JTIME, METVAL ) ) THEN
+                             MESG = 'Could not read HRLSRC variable from ' // TRIM( PNAME )
+                             CALL M3EXIT( PROGNAME, JDATE, JTIME, MESG, 2 )
+                        END IF
+
+                        EMIST( S,V ) = UFAC * EMACD( I ) * METVAL( IMET ) / TOT
+
+                    END IF
 
                 END DO
 
@@ -548,13 +563,9 @@ C               E.G. this is for mobile sources
 
 C.................  Loop through sources and apply emission factors to
 C                   hourly activity for non-diurnal emissions
-                DO S = 1, NSRC
-
-C.....................  Apply emission factors tp hourly activity data
-C.....................  Convert to tons (assuming EFs are in grams)
-                    EMIST( S,V ) = EMIST( S,V ) * EMFAC( S,V )
-
-                END DO  ! End loop on sources
+C.................  Apply emission factors tp hourly activity data
+C.................  Convert to tons (assuming EFs are in grams)
+                EMIST( :,V ) = EMIST( :,V ) * EMFAC( :,V )
 
             END IF              ! End namin != namout
 

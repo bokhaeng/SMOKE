@@ -37,24 +37,16 @@ C Last updated: $Date$
 C
 C***************************************************************************
 
+        USE MODGRDLIB
+        USE M3UTILIO
+
         IMPLICIT NONE
-
-C...........   INCLUDES
-
-        INCLUDE 'EMCNST3.EXT'   !  emissions constant parameters
-        INCLUDE 'PARMS3.EXT'    !  I/O API parameters
-        INCLUDE 'IODECL3.EXT'   !  I/O API function declarations
-        INCLUDE 'FDESC3.EXT'    !  I/O API file description data structures
-
-C...........   EXTERNAL FUNCTIONS and their descriptions:
-        LOGICAL    INGRID
-        EXTERNAL   INGRID
 
 C...........   SUBROUTINE ARGUMENTS
         INTEGER, INTENT (IN) :: NRECS          ! no. records w/ coordinates
         INTEGER, INTENT (IN) :: NGRID          ! no. grid cells
-        REAL   , INTENT (IN) :: XLOCA( NRECS ) ! X-coordinate in projection
-        REAL   , INTENT (IN) :: YLOCA( NRECS ) ! Y-ccordinate in projection
+        REAL(8), INTENT (IN) :: XLOCA( NRECS ) ! X-coordinate in projection
+        REAL(8), INTENT (IN) :: YLOCA( NRECS ) ! Y-ccordinate in projection
         INTEGER, INTENT(OUT) :: NEXCLD         ! no. sources excluded
         INTEGER, INTENT(OUT) :: NX   ( NGRID ) ! no. of sources per cell
         INTEGER, INTENT(OUT) :: INDX ( NRECS ) ! sorting index
@@ -68,13 +60,9 @@ C...........   Local variables
         INTEGER         COL   ! tmp column number
         INTEGER         ROW   ! tmp row number
         INTEGER         CSAV  ! saved value of C
-        INTEGER         NROWS, NCOLS  ! No. of rows, columns, and cells
+        INTEGER      :: NROWS = 0  ! No. of rows, columns, and cells
+        INTEGER      :: NCOLS = 0  ! No. of rows, columns, and cells
 
-        REAL            XX, YY, XDUM, YDUM ! tmp X and Y coordinates
-        REAL            XX0, YY0  ! X and Y origin in coordinates of grid
-        REAL            XX1, YY1  ! X and Y upper right position of grid
-        REAL            DDX, DDY  ! Inverse cell length in X and Y directions
-                                 
         CHARACTER(16)   COORD     !  coordinate system name
         CHARACTER(16)   COORUNIT  !  coordinate system projection units
         CHARACTER(16)   GRDNM     !  grid name
@@ -97,10 +85,7 @@ C.........  Initialize scratch gridding matrix - before sparse storage
             SN  ( I ) = 0
             INDX( I ) = I
 
-            XX = XLOCA( I )
-            YY = YLOCA( I )
-
-            IF( .NOT. INGRID( XX, YY, NCOLS, NROWS, COL, ROW ) ) THEN
+            IF( .NOT. INGRID( XLOCA( I ), YLOCA( I ), NCOLS, NROWS, COL, ROW ) ) THEN
                 NEXCLD = NEXCLD + 1
                 CYCLE  ! To end of loop
             END IF
@@ -119,7 +104,7 @@ C.........  Initialize scratch gridding matrix - before sparse storage
             SN( I ) = I
 
         END DO        !  end loop on sources I, computing gridding matrix.
-        
+
         IF( NCOLS * NROWS .NE. NGRID ) THEN
 
             MESG = 'INTERNAL ERROR: Number of cells in "' //

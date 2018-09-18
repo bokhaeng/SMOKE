@@ -335,6 +335,7 @@ C.........  Set up for opening I/O API sparse pollutant output files
 
 C.........  Set number of variables and allocate file description arrays
         NVARSET = 1 + NPACT
+        IF ( CATEGORY .EQ. 'POINT' )  NVARSET = NVARSET + 4     !!  FUG_* variables...
         WRITE( FDESC3D( 1 ), '(A,1X,I8)' ) '/NSRC/', NSRC
         
         IF( ALLOCATED( VARS_PER_FILE ) ) DEALLOCATE( VARS_PER_FILE )
@@ -737,6 +738,13 @@ C.........................  Skip records with zero data, unless option (ZFLAG) s
                     END DO          ! End loop through sources for sparse storage
                     NREC = N
 
+                END IF
+
+C.................  Give an error when all computed values are zero
+                IF( NREC == 0 ) THEN
+                    MESG = 'WARNING: All computed values are zero. Nothing to output'
+                    CALL M3MESG( MESG )
+                    CYCLE
                 END IF
 
 C...............  Give warning for that includes negative annual value

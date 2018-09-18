@@ -39,10 +39,10 @@ C***************************************************************************
 
 C...........   MODULES for public variables
 C...........   This module is the inventory arrays
-        USE MODSOURC, ONLY: IFIP, NPCNT, IPOSCOD, TPFLAG, INVYR,
+        USE MODSOURC, ONLY: CIFIP, NPCNT, IPOSCOD, TPFLAG, INVYR,
      &                      POLVAL, CSOURC, CSCC, CINTGR,
      &                      XLOCA, YLOCA, CELLID, CEXTORL,
-     &                      ISIC, CSRCTYP, CMACT, CNAICS
+     &                      CISIC, CSRCTYP, CMACT, CNAICS, CSHAPE
 
 C...........   This module contains the cross-reference tables
         USE MODXREF, ONLY: AR2PTIDX, AR2PTTBL, AR2PTCNT
@@ -68,8 +68,6 @@ C...........   SUBROUTINE ARGUMENTS
         INTEGER , INTENT (INOUT) :: NRAWBP  ! no. raw records by pollutant
 
 C...........   Local pointers
-        INTEGER, POINTER :: OLDIFIP   ( : )   !  source FIPS ID
-        INTEGER, POINTER :: OLDISIC   ( : )   !  source SIC
         INTEGER, POINTER :: OLDNPCNT  ( : )   !  number of pollutants per source
         INTEGER, POINTER :: OLDIPOSCOD( : )   !  positn of pol in INVPCOD
         INTEGER, POINTER :: OLDTPFLAG ( : )   ! temporal profile types
@@ -77,14 +75,17 @@ C...........   Local pointers
 
         REAL   , POINTER :: OLDPOLVAL( :,: )   ! emission values
 
+        CHARACTER(FIPLEN3), POINTER :: OLDCIFIP ( : ) ! FIPS code
         CHARACTER(ALLLEN3), POINTER :: OLDCSOURC( : ) ! concat src
         CHARACTER(SCCLEN3), POINTER :: OLDCSCC  ( : ) ! scc code
+        CHARACTER(SICLEN3), POINTER :: OLDCISIC ( : ) ! SIC code
         
         CHARACTER(MACLEN3), POINTER :: OLDCMACT  ( : )  ! MACT code
         CHARACTER(NAILEN3), POINTER :: OLDCNAICS ( : )  ! NAICS code
         CHARACTER(STPLEN3), POINTER :: OLDCSRCTYP( : )  ! source type code
         CHARACTER(EXTLEN3), POINTER :: OLDCEXTORL( : )  ! extended orl
         CHARACTER(INTLEN3), POINTER :: OLDCINTGR ( : )  ! integrate status 
+        CHARACTER(SHPLEN3), POINTER :: OLDCSHAPE ( : )  ! area-ff10 SHAPE-ID 
 
 C...........   Local allocatable arrays
         INTEGER, ALLOCATABLE :: REPIDX( : )      ! index for sorting
@@ -170,8 +171,8 @@ C.............  Update total number of sources and records
             NRAWBP = NRAWBP + NA2PRECS
 
 C.............  Associate temporary pointers with sorted arrays
-            OLDIFIP    => IFIP
-            OLDISIC    => ISIC
+            OLDCIFIP   => CIFIP
+            OLDCISIC   => CISIC
             OLDNPCNT   => NPCNT
             OLDIPOSCOD => IPOSCOD
             OLDTPFLAG  => TPFLAG
@@ -197,20 +198,24 @@ C.............  Associate temporary pointers with sorted arrays
                 OLDCEXTORL   => CEXTORL
             END IF
 
+            IF( ASSOCIATED( CSHAPE ) ) THEN
+                OLDCSHAPE   => CSHAPE
+            END IF
+
 C.............  Nullify original sorted arrays
-            NULLIFY( IFIP, ISIC, NPCNT, IPOSCOD, TPFLAG, INVYR,
+            NULLIFY( CIFIP, CISIC, NPCNT, IPOSCOD, TPFLAG, INVYR,
      &               POLVAL, CSOURC, CSCC, CMACT, CSRCTYP, CNAICS,
-     &               CEXTORL, CINTGR )
+     &               CEXTORL, CINTGR, CSHAPE )
 
 C.............  Deallocate original X and Y location arrays
 C               Don't need to store old values since they aren't set
             DEALLOCATE( XLOCA, YLOCA, CELLID  )
 
 C.............  Allocate memory for larger sorted arrays
-            ALLOCATE( IFIP( NSRC ), STAT=IOS )
-            CALL CHECKMEM( IOS, 'IFIP', PROGNAME )
-            ALLOCATE( ISIC( NSRC ), STAT=IOS )
-            CALL CHECKMEM( IOS, 'ISIC', PROGNAME )
+            ALLOCATE( CIFIP( NSRC ), STAT=IOS )
+            CALL CHECKMEM( IOS, 'CIFIP', PROGNAME )
+            ALLOCATE( CISIC( NSRC ), STAT=IOS )
+            CALL CHECKMEM( IOS, 'CISIC', PROGNAME )
             ALLOCATE( NPCNT( NSRC ), STAT=IOS )
             CALL CHECKMEM( IOS, 'NPCNT', PROGNAME )
             ALLOCATE( IPOSCOD( NRAWBP ), STAT=IOS )
@@ -257,6 +262,13 @@ C.............  Allocate memory for larger sorted arrays
                 CEXTORL = ' '   ! array
             END IF
 
+            IF( ASSOCIATED( OLDCSHAPE ) ) THEN
+                ALLOCATE( CSHAPE( NSRC ), STAT=IOS )
+                CALL CHECKMEM( IOS, 'CSHAPE', PROGNAME )
+
+                CSHAPE = ' '   ! array
+            END IF
+
             ALLOCATE( XLOCA( NSRC ), STAT=IOS )
             CALL CHECKMEM( IOS, 'XLOCA', PROGNAME )
             ALLOCATE( YLOCA( NSRC ), STAT=IOS )
@@ -264,7 +276,7 @@ C.............  Allocate memory for larger sorted arrays
             ALLOCATE( CELLID( NSRC ), STAT=IOS )
             CALL CHECKMEM( IOS, 'CELLID', PROGNAME )
             
-            ISIC = 0          ! array
+            CISIC = ' '       ! array
             NPCNT = 0         ! array
             
             POLVAL = BADVAL3  ! array
@@ -303,10 +315,10 @@ C.....................  Loop through pollutants for this source
 C.........................  Store information for reporting
                         REPPOS = REPPOS + 1
                         REPIDX( REPPOS ) = REPPOS
-                        REPLSCC( REPPOS ) = STR2INT( CSCC( S )( 1:5 ) )
+                        REPLSCC( REPPOS ) = STR2INT( CSCC( S )( SCCEXPLEN3+1:SCCEXPLEN3+5 ) )
                         REPRSCC( REPPOS ) = 
-     &                           STR2INT( CSCC( S )( 6:SCCLEN3 ) )
-                        REPSTA( REPPOS ) = STR2INT( CSOURC( S )( 1:3 ) )
+     &                           STR2INT( CSCC( S )( SCCEXPLEN3+6:SCCLEN3 ) )
+                        REPSTA( REPPOS ) = STR2INT( CSOURC( S )( FIPEXPLEN3+1:FIPEXPLEN3+3 ) )
                         REPPOL( REPPOS ) = IPOSCOD( K )
                         REPORIGEMIS( REPPOS ) = POLVAL( K,NEM )
                         
@@ -331,8 +343,8 @@ C.....................  Loop through all locations for this source
 C.........................  Increment source position and copy source info
                         NEWSRCPOS = NEWSRCPOS + 1
                         
-                        IFIP( NEWSRCPOS ) = OLDIFIP( S )
-                        ISIC( NEWSRCPOS ) = OLDISIC( S )
+                        CIFIP( NEWSRCPOS ) = OLDCIFIP( S )
+                        CISIC( NEWSRCPOS ) = OLDCISIC( S )
                         NPCNT( NEWSRCPOS ) = OLDNPCNT( S )
                         TPFLAG( NEWSRCPOS ) = OLDTPFLAG( S )
                         INVYR( NEWSRCPOS ) = OLDINVYR( S )
@@ -351,6 +363,10 @@ C.........................  Increment source position and copy source info
 
                         IF( ASSOCIATED( OLDCEXTORL ) ) THEN
                             CEXTORL( NEWSRCPOS ) = OLDCEXTORL( S )
+                        END IF
+
+                        IF( ASSOCIATED( OLDCSHAPE ) ) THEN
+                            CSHAPE( NEWSRCPOS ) = OLDCSHAPE( S )
                         END IF
 
 C.........................  Store X and Y locations
@@ -383,11 +399,11 @@ C.............................  Store information for reporting
                                 REPPOS = REPPOS + 1
                                 REPIDX( REPPOS ) = REPPOS
                                 REPLSCC( REPPOS ) = 
-     &                             STR2INT( OLDCSCC( S )( 1:5 ) )
+     &                             STR2INT( OLDCSCC( S )( SCCEXPLEN3+1:SCCEXPLEN3+5 ) )
                                 REPRSCC( REPPOS ) = 
-     &                             STR2INT( OLDCSCC( S )( 6:SCCLEN3 ) )
+     &                             STR2INT( OLDCSCC( S )( SCCEXPLEN3+6:SCCLEN3 ) )
                                 REPSTA( REPPOS ) = 
-     &                             STR2INT( OLDCSOURC( S )( 1:3 ) )
+     &                             STR2INT( OLDCSOURC( S )( FIPEXPLEN3+1:FIPEXPLEN3+3 ) )
                                 REPPOL( REPPOS ) = OLDIPOSCOD( K )
                                 REPORIGEMIS( REPPOS ) = 
      &                              OLDPOLVAL( K,NEM )
@@ -417,8 +433,8 @@ C                   then need to copy information to new arrays
                 
                     NEWSRCPOS = NEWSRCPOS + 1
                     
-                    IFIP( NEWSRCPOS ) = OLDIFIP( S )
-                    ISIC( NEWSRCPOS ) = OLDISIC( S )
+                    CIFIP( NEWSRCPOS ) = OLDCIFIP( S )
+                    CISIC( NEWSRCPOS ) = OLDCISIC( S )
                     NPCNT( NEWSRCPOS ) = OLDNPCNT( S )
                     TPFLAG( NEWSRCPOS ) = OLDTPFLAG( S )
                     INVYR( NEWSRCPOS ) = OLDINVYR( S )
@@ -439,6 +455,10 @@ C                   then need to copy information to new arrays
                         CEXTORL( NEWSRCPOS ) = OLDCEXTORL( S )
                     END IF
 
+                    IF( ASSOCIATED( OLDCSHAPE ) ) THEN
+                        CSHAPE( NEWSRCPOS ) = OLDCSHAPE( S )
+                    END IF
+
                     DO K = OLDRECPOS, OLDRECPOS + OLDNPCNT( S ) - 1
                         
                         NEWRECPOS = NEWRECPOS + 1
@@ -457,20 +477,24 @@ C                   then need to copy information to new arrays
 
 C.........  Deallocate old source and emissions arrays
         IF( NA2PSRCS > 0 ) THEN
-            DEALLOCATE( OLDIFIP, OLDISIC, OLDNPCNT, OLDIPOSCOD, 
-     &                  OLDTPFLAG, OLDINVYR, OLDPOLVAL, OLDCSOURC, 
-     &                  OLDCSCC, OLDCSRCTYP )
+            NULLIFY( OLDCIFIP, OLDCISIC, OLDNPCNT, OLDIPOSCOD, 
+     &               OLDTPFLAG, OLDINVYR, OLDPOLVAL, OLDCSOURC, 
+     &               OLDCSCC, OLDCSRCTYP )
      
             IF( ASSOCIATED( OLDCMACT ) ) THEN
-                DEALLOCATE( OLDCMACT, OLDCNAICS )
+                NULLIFY( OLDCMACT, OLDCNAICS )
             END IF
 
             IF( ASSOCIATED( OLDCINTGR ) ) THEN
-                DEALLOCATE( OLDCINTGR )
+                NULLIFY( OLDCINTGR )
             END IF
 
             IF( ASSOCIATED( OLDCEXTORL ) ) THEN
-                DEALLOCATE( OLDCEXTORL )
+                NULLIFY( OLDCEXTORL )
+            END IF
+
+            IF( ASSOCIATED( OLDCSHAPE ) ) THEN
+                NULLIFY( OLDCSHAPE )
             END IF
 
         END IF
@@ -491,6 +515,7 @@ C           pollutants and counties
             
             TSTA = REPSTA( J )
             WRITE( TSCC, '(2I5.5)' ) REPLSCC( J ), REPRSCC( J )
+            CALL PADZERO( TSCC )
             TPOL = REPPOL( J )
             
             IF( TSTA /= LSTA .OR.
@@ -522,6 +547,7 @@ C.........  Loop through and store final reporting information
             
             TSTA = REPSTA( J )
             WRITE( TSCC, '(2I5.5)' ) REPLSCC( J ), REPRSCC( J )
+            CALL PADZERO( TSCC )
             TPOL = REPPOL( J )
             
             IF( TSTA /= LSTA .OR.

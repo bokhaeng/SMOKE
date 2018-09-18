@@ -87,7 +87,7 @@ C...........   Other local variables
         INTEGER     I, J, L, LJ, L1, N, P, V  ! counters and indexes
         INTEGER     IOS         ! error status
         INTEGER  :: IREC = 0    ! record counter
-        INTEGER     TDEV        ! tmp. file unit
+        INTEGER  :: TDEV = 0    ! tmp. file unit
         INTEGER     DAY         ! day value
         INTEGER     DAYIDX
         INTEGER     SCCIDX
@@ -110,6 +110,7 @@ C...........   Other local variables
         CHARACTER(IOVLEN3)  CSPC      ! tmp species buffer
         CHARACTER(SCCLEN3)  TSCC      ! current SCC
         CHARACTER(SCCLEN3)  PSCC      ! previous SCC
+        CHARACTER(FIPLEN3)  CFIP      ! current ref county
         CHARACTER(50)       TPROFID   ! current profile ID
         CHARACTER(50)       PPROFID   ! previous profile ID
         
@@ -128,8 +129,8 @@ C.........  Open emission factors file based on MRCLIST file
         
         IF( FILENAME .EQ. ' ' ) THEN
             WRITE( MESG, 94010 ) 'ERROR: No emission factors file ' //
-     &        'for reference county', MCREFIDX( REFIDX,1 ), ' and ' //
-     &        'fuel month', MONTH
+     &        'for reference county ' //  MCREFIDX( REFIDX,1 ) //
+     &        ' and fuel month', MONTH
             CALL M3EXIT( PROGNAME, 0, 0, MESG, 2 )
         END IF
 
@@ -333,9 +334,11 @@ C.............  Check that county matches requested county
      &            'file.'
                 CALL M3EXIT( PROGNAME, 0, 0, MESG, 2 )
             END IF
-            
-            IF( STR2INT( SEGMENT( 6 ) ) .NE. 
-     &          MCREFIDX( REFIDX,1 ) ) THEN
+
+            CFIP = SEGMENT( 4 )
+            CALL PADZERO( CFIP )
+
+            IF( CFIP .NE. MCREFIDX( REFIDX,1 ) ) THEN
                 WRITE( MESG, 94010 ) 'ERROR: Reference county ' //
      &            'at line', IREC, 'of emission factors file ' //
      &            'does not match county listed in MRCLIST file.'
@@ -463,6 +466,7 @@ C.............  Set hour for current line
 
 C.............  Set SCC index for current line
             TSCC = TRIM( SEGMENT( 7 ) )
+            CALL PADZERO( TSCC )
             IF( TSCC .NE. PSCC ) THEN
                 SKIPSCC = .FALSE.
             
@@ -540,6 +544,14 @@ C.............  Store emission factors for each pollutant
             DO P = 1, NMVSPOLS
             
                 EMVAL = STR2REAL( SEGMENT( NNONPOL + P ) )
+
+                IF( EMVAL < 0 ) THEN    ! reset negative EF to zero
+                    EMVAL = 0.0
+                    WRITE( MESG, 94010 ) 'WARNING: Resetting negative ' //
+     &                ' emission factor to zero at line', IREC
+                    CALL M3MESG( MESG )
+                END IF
+
                 RPPEMFACS( DAYIDX, SCCIDX, HOUR, PROFIDX, P ) = EMVAL
 
             END DO

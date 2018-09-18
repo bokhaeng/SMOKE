@@ -1,7 +1,8 @@
 
-        SUBROUTINE ALLOCMRG( MXGRP, MXVARPGP, AMULSIZ, MMULSIZ, PMULSIZ,
-     &                       ASPCSIZ, MSPCSIZ, PSPCSIZ, APOLSIZ, 
-     &                       MPOLSIZ, PPOLSIZ )
+        SUBROUTINE ALLOCMRG( MXGRP, MXVARPGP, 
+     &                       AMULSIZ, MMULSIZ, PMULSIZ,
+     &                       ASPCSIZ, MSPCSIZ, PSPCSIZ,
+     &                       APOLSIZ, MPOLSIZ, PPOLSIZ )
 
 C***********************************************************************
 C  subroutine ALLOCMRG body starts at line
@@ -16,6 +17,9 @@ C  SUBROUTINES AND FUNCTIONS CALLED:
 C
 C  REVISION  HISTORY:
 C       Created 2/99 by M. Houyoux
+C
+C      Version Carlie J. Coats, Jr., 2014
+C      Allocates zero-based  cumulative-count gridding matrices.
 C
 C***********************************************************************
 C
@@ -71,7 +75,7 @@ C.........  This module contains the major data structure and control flags
 
 C.........  This module contains arrays for plume-in-grid and major sources
         USE MODELEV, ONLY: ELEVFLTR, ELEVSRC, NHRSRC, INDXH, NGROUP, 
-     &                     GRPGID, GRPXL, GRPYL, GRPCOL, GRPROW, 
+     &                     GRPGID, GRPXX, GRPYY, GRPCOL, GRPROW, 
      &                     GRPHT, GRPDM, GRPTK, GRPVE
 
 C.........  This module contains the control packet data and control matrices
@@ -388,10 +392,10 @@ C.........  Point source fixed-size arrays
             END IF
 
             IF( ELEVFLAG ) THEN
-                ALLOCATE( GRPXL( NGROUP ), STAT=IOS )    ! x-position
-                CALL CHECKMEM( IOS, 'GRPXL', PROGNAME )
-                ALLOCATE( GRPYL( NGROUP ), STAT=IOS )    ! y-position
-                CALL CHECKMEM( IOS, 'GRPYL', PROGNAME )
+                ALLOCATE( GRPXX( NGROUP ), STAT=IOS )    ! x-position
+                CALL CHECKMEM( IOS, 'GRPXX', PROGNAME )
+                ALLOCATE( GRPYY( NGROUP ), STAT=IOS )    ! y-position
+                CALL CHECKMEM( IOS, 'GRPYY', PROGNAME )
                 ALLOCATE( GRPCOL( NGROUP ), STAT=IOS )   ! column
                 CALL CHECKMEM( IOS, 'GRPCOL', PROGNAME )
                 ALLOCATE( GRPROW( NGROUP ), STAT=IOS )   ! row

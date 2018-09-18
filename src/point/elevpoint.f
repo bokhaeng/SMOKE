@@ -55,7 +55,7 @@ C***********************************************************************
 C...........   MODULES for public variables
 C...........   This module is the source inventory arrays
         USE MODSOURC, ONLY: XLOCA, YLOCA, STKDM, STKHT, STKTK, STKVE,
-     &                      CSOURC, IFIP, CPDESC, CSCC
+     &                      CSOURC, CIFIP, CPDESC, CSCC, CNAICS
 
 C.........  This module contains arrays for plume-in-grid and major sources
         USE MODELEV, ONLY: LMAJOR, LPING, LCUTOFF, GROUPID, GINDEX,
@@ -78,6 +78,8 @@ C.........  This module contains the global variables for the 3-d grid
         USE MODGRID, ONLY: GDTYP, GRDNM, P_ALP, P_BET, P_GAM, 
      &                     XCENT, YCENT, NCOLS, NROWS, NGRID
 
+        USE MODGRDLIB
+
         IMPLICIT NONE
 
 C...........   INCLUDES:
@@ -98,7 +100,6 @@ C...........   EXTERNAL FUNCTIONS and their descriptions:
         LOGICAL         ENVYN
         LOGICAL         EVALCRIT
         INTEGER         FINDC
-        LOGICAL         INGRID 
         REAL            PLUMRIS
         INTEGER         PROMPTFFILE
         CHARACTER(16)   PROMPTMFILE
@@ -106,11 +107,11 @@ C...........   EXTERNAL FUNCTIONS and their descriptions:
 
         EXTERNAL        CRLF, DSCM3GRD, ENVINT, ENVREAL, ENVYN, INDEX1,
      &                  EVALCRIT, FINDC, PLUMRIS, PROMPTFFILE,
-     &                  PROMPTMFILE, INGRID
+     &                  PROMPTMFILE
 
 C...........  LOCAL PARAMETERS and their descriptions:
         CHARACTER(50), PARAMETER :: 
-     &  CVSW = '$Name$' ! CVS release tag
+     &  CVSW = '$Name SMOKEv4.6_Sep2018$' ! CVS release tag
 
         INTEGER, PARAMETER :: LAYPOINT_APPROACH   = 0
         INTEGER, PARAMETER :: NOPING_APPROACH     = 0
@@ -118,9 +119,9 @@ C...........  LOCAL PARAMETERS and their descriptions:
 
         
 C...........   Indicator for which public inventory arrays need to be read
-        INTEGER,            PARAMETER :: NINVARR = 11
+        INTEGER,            PARAMETER :: NINVARR = 12
         CHARACTER(IOVLEN3), PARAMETER :: IVARNAMS( NINVARR ) = 
-     &                                 ( / 'IFIP           '
+     &                                 ( / 'CIFIP          '
      &                                   , 'TZONES         ' 
      &                                   , 'XLOCA          '
      &                                   , 'YLOCA          '
@@ -129,6 +130,7 @@ C...........   Indicator for which public inventory arrays need to be read
      &                                   , 'STKTK          '
      &                                   , 'STKVE          '
      &                                   , 'CSOURC         '
+     &                                   , 'CNAICS         '
      &                                   , 'CPDESC         '
      &                                   , 'CSCC           ' / )
 
@@ -183,11 +185,10 @@ C...........   File units and logical/physical names
         CHARACTER(16)   MNAME   !  plume-in-grid srcs stack groups output file
 
 C...........   Other local variables
-        INTEGER         G, I, J, K, S, L, L2, N, V, I1,J1,T    ! indices and counters
+        INTEGER         G, I, J, K, DS, S, L, L2, N, V, I1,J1,T    ! indices and counters
 
         INTEGER         COL           ! tmp column number
         INTEGER      :: ELEVTYPE = 0  ! code for elevated source approach
-        INTEGER         FIP           ! tmp country/st/county code
         INTEGER         IGRP          ! tmp group ID
         INTEGER         IOS           ! i/o status
         INTEGER         IOSCUT        ! i/o status for cutoff E.V.
@@ -213,10 +214,10 @@ C...........   Other local variables
         INTEGER      :: TSTEP = 10000 ! time step HHMMSS
         INTEGER      :: TSTEP_T       ! unsued timestep from environment
         INTEGER         TZONE         ! output time zone
-        INTEGER      :: DAY_NSRC, MY_INDEX,MY_LOOP
+        INTEGER      :: DAY_NSRC
         INTEGER      :: JDATE, JTIME
 
-        REAL            DM            ! tmp inside stack diameter [m]
+        REAL            DM, DMVAL     ! tmp inside stack diameter [m]
         REAL            FL            ! tmp stack exit flow rate [m^3/s]
         REAL            HT            ! tmp inside stack diameter [m]
         REAL            LAT           ! tmp latitude [degrees]
@@ -227,16 +228,19 @@ C...........   Other local variables
         REAL            MINTK         ! min stack group temperature
         REAL            MINVE         ! min stack group velocity
         REAL            TK            ! tmp stack exit temperature [K]
-        REAL            VE            ! tmp stack exit velocity diameter [m/s]
+        REAL            VE, VEVAL     ! tmp stack exit velocity diameter [m/s]
 
         LOGICAL :: EFLAG    = .FALSE. ! true: error detected
         LOGICAL :: SFLAG    = .FALSE. ! true: store group info
         LOGICAL    VFLAG              ! true: use variable grid
+        LOGICAL :: RFLAG    = .TRUE.  ! true: skip checking fake source
+        LOGICAL :: MFLAG    = .TRUE.  ! true: fill fake source
         LOGICAL :: LFLAG    = .TRUE.  ! true: write out lat/lon info
 
-        CHARACTER(10)   SCC
+        CHARACTER(FIPLEN3) CFIP       ! tmp country/st/county code
+        CHARACTER(SCCLEN3) SCC
         CHARACTER(80)   GDESC     !  grid description
-        CHARACTER(256)  BUFFER
+        CHARACTER(512)  BUFFER
         CHARACTER(256)  MESG
         CHARACTER(16) DAYNAME   !  daily inventory file name
 
@@ -264,6 +268,11 @@ C.........  Get environment variables that control this program
 
         MESG = 'Approach for defining major/minor sources'
         ELEVTYPE = ENVINT( 'SMK_ELEV_METHOD', MESG, 0, IOS )
+
+C.........  Define whether write out a fake source when there is no group
+        MESG = 'Define whether write out a fake source when ' //
+     &         'there is no group to output'
+        MFLAG = ENVYN( 'ELEV_WRITE_FAKE_SRC', MESG, .TRUE., IOS )
 
 C.........  Define whether write out lat/lon info for the elevated sources
         MESG = 'Define whether write out lat/lon info for the ' //
@@ -391,14 +400,10 @@ C           results are stored in module MODINFO.
 C.........  Allocate memory for and read in required inventory characteristics
         CALL RDINVCHR( CATEGORY, ENAME, SDEV, NSRC, NINVARR, IVARNAMS )
 
-
 C.........  If at least one stack parameters is missing, then we have a fire inventory
-        DO J= 1, NSRC
-           IF (STKHT(J) .NE. BADVAL3) THEN
-               FFLAG = .FALSE.
-           ENDIF
+        DO J = 1, NSRC
+            IF (STKHT(J) .NE. BADVAL3) FFLAG = .FALSE.
         END DO
-
 
 C.........  Allocate memory for source status arrays and group numbers
         ALLOCATE( LMAJOR( NSRC ), STAT=IOS )
@@ -421,8 +426,6 @@ C.........  Allocate memory for source status arrays and group numbers
         SMOLDER(1:NSRC) = .FALSE.        ! array
 
 C.........  Initialize source status and group number arrays
-
-
         LMAJOR  = .FALSE.   ! array
         LPING   = .FALSE.   ! array
         GROUPID = 0         ! array
@@ -449,7 +452,6 @@ C           to grid cells for the STACK_GROUPS file.
             NCOLS = NCOLS3D
             NROWS = NROWS3D
             NGRID = NCOLS * NROWS
-
         END IF            
         
 C.........  Convert source x,y locations to coordinates of the projected grid
@@ -518,7 +520,6 @@ C           exactly
 
            ALLOCATE( GRPCNT( NINVGRP ), STAT=IOS )
            CALL CHECKMEM( IOS, 'GRPCNT', PROGNAME )
-
                       
            ALLOCATE( GRPGID( NINVGRP ), STAT=IOS )
            CALL CHECKMEM( IOS, 'GRPGID', PROGNAME )
@@ -540,7 +541,7 @@ C           exactly
            CALL CHECKMEM( IOS, 'GRPFL', PROGNAME )
 
            ALLOCATE( GRPFIP( NINVGRP ), STAT=IOS )
-          CALL CHECKMEM( IOS, 'GRPFIP', PROGNAME )
+           CALL CHECKMEM( IOS, 'GRPFIP', PROGNAME )
            ALLOCATE( GRPACRES( NINVGRP ), STAT=IOS )
            CALL CHECKMEM( IOS, 'GRPACRES', PROGNAME )
 
@@ -623,30 +624,23 @@ C.............  Check to see if appropriate variable list exists
             JDATE = SDATE
             JTIME = STIME
             DO T = 1, NSTEPS
-            CALL SAFE_READ3( DAYNAME, 'ACRESBURNED', ALLAYS3,
-     &          JDATE, JTIME, DAY_ACRES )   ! Wildfire inventory format
 
-                   IF ( .NOT. READ3( DAYNAME, 'INDXD', ALLAYS3,
-     &                        JDATE, JTIME, DAY_INDEX ) ) THEN
+                CALL SAFE_READ3( DAYNAME, 'ACRESBURNED', ALLAYS3,
+     &                           JDATE, JTIME, DAY_ACRES )   ! Wildfire inventory format
 
-                       MESG = 'Could not read "INDXD" from file "'//
+                IF ( .NOT. READ3( DAYNAME, 'INDXD', ALLAYS3,
+     &                            JDATE, JTIME, DAY_INDEX ) ) THEN
+
+                    MESG = 'Could not read "INDXD" from file "'//
      &                         TRIM( DAYNAME ) // '".'
-                       CALL M3EXIT( PROGNAME, SDATE, STIME, MESG, 2 )
+                    CALL M3EXIT( PROGNAME, SDATE, STIME, MESG, 2 )
 
-                   END IF
+                END IF
 
-                   DO S = 1, NSRC
-                      MY_INDEX = -1
-                      DO MY_LOOP = 1, DAY_NSRC
-                         IF(S == DAY_INDEX(MY_LOOP) ) MY_INDEX = MY_LOOP
-                      ENDDO
-                      IF(MY_INDEX .GT. 0) THEN
-                         IF ((DAY_ACRES( MY_INDEX )) .GT. ACRES(S)) THEN
-                             ACRES(S) = DAY_ACRES( MY_INDEX )
-                         ENDIF
-                      ENDIF         
-
-                   ENDDO
+                DO DS = 1, DAY_NSRC 
+                    S = DAY_INDEX( DS )
+                    IF( S > 0 ) ACRES( S ) = DAY_ACRES( DS )
+                ENDDO
 
                 CALL NEXTIME(JDATE, JTIME,10000)
             
@@ -670,7 +664,7 @@ C           program duration if source is in an inventory group
 
 C.............  Exclude sources that are outside of the grid
             IF( .NOT. INGRID( SRCXL( S ), SRCYL( S ),
-     &                            NCOLS, NROWS, COL, ROW ) ) CYCLE
+     &                        NCOLS, NROWS, COL, ROW ) ) CYCLE
 
 C.............  For sources in an inventory group...
             IF ( IGRP .GT. 0 ) THEN
@@ -682,7 +676,7 @@ C.................  Update stack parameters, if needed
                 STKHT( S ) = GRPHT ( IGRP )
                 STKTK( S ) = GRPTK ( IGRP )
                 STKVE( S ) = GRPVE ( IGRP )
-                IFIP ( S ) = GRPFIP( IGRP )
+                CIFIP( S ) = GRPFIP( IGRP )
 
             END IF
 
@@ -690,7 +684,7 @@ C.............  Store reordered group IDs
             SRCGROUP( S ) = IGRP
 
 C.............  Set temporary values for the current source
-            FIP  = IFIP   ( S )
+            CFIP = CIFIP  ( S )
             CSRC = CSOURC ( S )
             PLT  = CSRC   ( PLTPOS3:PLTEND )
             HT   = STKHT  ( S )
@@ -708,9 +702,13 @@ C               (include emissions TOTAL for group).
             VALS( DM_IDX ) = DM
             VALS( TK_IDX ) = TK
             VALS( VE_IDX ) = VE
-            VALS( FL_IDX ) = 0.25 * PI * DM * DM * VE
+            DMVAL = DM
+            VEVAL = VE
+            IF( DM == BADVAL3 ) DMVAL = 0.0
+            IF( VE == BADVAL3 ) VEVAL = 0.0
+            VALS( FL_IDX ) = 0.25 * PI * DMVAL * DMVAL * VEVAL 
             VALS( SRC_IDX )= S
-            VALS( FIP_IDX )= FIP
+            !VALS( FIP_IDX )= CFIP
             CHRS( PLT_IDX )= ADJUSTL( PLT )
 
 C.............  If cutoff approach is used, compute and store plume rise
@@ -762,7 +760,7 @@ C.............  Add pollutant value to VALS and set RANK for pollutants
 
 C.............  If PELVCONFIG used for elevated sources, check if source matches 
 C               criteria given
-            IF(  (ELEVTYPE .EQ. PELVCONFIG_APPROACH-1)) THEN
+            IF(  (ELEVTYPE .EQ. PELVCONFIG_APPROACH-1) ) THEN
 
 C.................  See if source matches criteria for elevated sources
                 EVSTAT = .FALSE.  ! array
@@ -782,7 +780,6 @@ C.................  See if source matches criteria for elevated sources
 C.................  See if source matches criteria for elevated sources
                 EVSTAT = .FALSE.  ! array
 
-
                 IF ( FFLAG .AND. SMOLDER( S ) ) THEN
                     LMAJOR( S ) = .FALSE.
 
@@ -793,7 +790,6 @@ C.................  See if source matches criteria for elevated sources
                       NMAJOR = NMAJOR + 1
                       IF ( IGRP .NE. PGRP ) NMJRGRP = NMJRGRP + 1
                       LMAJOR( S ) = .TRUE.
-
                    END IF
                 END IF
             END IF            ! End elevated sources approach
@@ -837,6 +833,35 @@ C               a group, increase the total maximum group count.
             PGRP = IGRP
 
         END DO         ! End loop over sources
+
+C.........  Assign a fake source when there is no group for elevated and/or ping
+        IF( MFLAG .AND. NGROUP < 1 ) THEN
+            RFLAG = .FALSE.
+            NGROUP = 1
+            DO J = 1, NSRC
+                S    = GINDEX ( J )
+                IGRP = GROUPID( S )
+
+C.................  Select a source that are inside of the grid
+                IF( INGRID( SRCXL( S ), SRCYL( S ),
+     &                      NCOLS, NROWS, COL, ROW ) ) THEN
+
+                    IF( (ELEVTYPE .EQ. PELVCONFIG_APPROACH) .OR.
+     &                  (ELEVTYPE .EQ. PELVCONFIG_APPROACH-1) ) THEN
+                        NMAJOR = 1
+                        LMAJOR( S ) = .TRUE.
+                    END IF
+
+                    IF( (PINGTYPE .EQ. PELVCONFIG_APPROACH-1) ) THEN
+                        NPING = 1
+                        LPING ( S ) = .TRUE.
+                    END IF
+
+                    EXIT   ! exit once fill a fake source
+
+                END IF
+            END DO
+        END IF
 
 C.........  Now reset group arrays for major and PinG sources only. Groups
 C           are not used by SMOKE for other point sources.
@@ -922,7 +947,7 @@ C           unsorted.  The WPINGSTK routine uses this index
         GRPTK   = BADVAL3
         GRPVE   = BADVAL3
         GRPFL   = BADVAL3
-        GRPFIP  = 0
+        GRPFIP  = ' '
         GRPCNT  = 0
         GRPCOL  = 0
         GRPROW  = 0
@@ -1009,8 +1034,10 @@ C.................  Store the rest of the group settings in output arrays
                     GRPHT ( G ) = STKHT ( S )
                     GRPTK ( G ) = STKTK ( S )
                     GRPVE ( G ) = STKVE ( S )
-                    GRPFL ( G ) = 0.25 * PI * GRPDM(G)*GRPDM(G)*GRPVE(G)
-                    GRPFIP( G ) = IFIP (S )
+                    IF( GRPDM( G ) == BADVAL3 ) DMVAL = 0.0
+                    IF( GRPVE( G ) == BADVAL3 ) VEVAL = 0.0
+                    GRPFL ( G ) = 0.25 * PI * DMVAL * DMVAL * VEVAL
+                    GRPFIP( G ) = CIFIP ( S )
                     IF (FFLAG) GRPACRES( G ) = ACRES( S)
                     IF (LMAJOR(S)) GRPLMAJOR( G ) = 1
                     IF (LPING(S)) GRPLPING ( G ) = 1
@@ -1027,7 +1054,7 @@ C.................  Get setup for another call to EVALCRIT to get STATUS
                 VALS( FL_IDX ) = GRPFL ( OUTG )
                 IF( LCUTOFF ) VALS( RISE_IDX ) = RISE( S )
                 VALS( SRC_IDX )= S
-                VALS( FIP_IDX )= IFIP( S )
+                !VALS( FIP_IDX )= CIFIP( S )
 
                 PLT = CSOURC( S )( PLTPOS3:PLTEND )
                 CHRS( PLT_IDX )= ADJUSTL( PLT )
@@ -1044,8 +1071,8 @@ C.................  Add pollutant value to VALS and set RANK for pollutants
                 END IF
 
 C.................  If source is PinG, write out for PinG
+                IF ( RFLAG ) THEN
                 IF ( LPING( S ) ) THEN
-
 
 C..................... Evaluate PinG criteria again to get PGSTAT for writing;
 C                      if valid, then write report fields
@@ -1093,6 +1120,7 @@ C.....................  Otherwise, internal error
 
 
                 END IF
+                END IF
 
             END IF  ! End if major or PinG sources
 
@@ -1107,9 +1135,17 @@ C.........  Ensure that all is well with memory allocation
             CALL M3EXIT( PROGNAME, 0, 0, ' ', 2 )
         END IF
 
-C.............  Process the stack group coordinates for the current grid...
+C.........  If all values are zero, give error
+        IF ( NMAJOR .EQ. 0 .AND.
+     &       NPING  .EQ. 0       ) THEN
+            MESG = 'No groups, major sources, or '//
+     &             'plume-in-grid sources.'
+            CALL M3EXIT( PROGNAME, 0, 0, MESG, 2 )
+        END IF
 
-C.............  Convert x,y location to coordinates of the projected grid
+C.........  Process the stack group coordinates for the current grid...
+
+C.........  Convert x,y location to coordinates of the projected grid
         GRPXL = GRPLON
         GRPYL = GRPLAT
         CALL CONVRTXY( NGROUP, GDTYP, GRDNM, P_ALP, P_BET, P_GAM,
@@ -1176,16 +1212,6 @@ C.........  Write status of processing
             CALL M3MSG2( MESG )
         END IF
 
-C.........  If all values are zero, give error
-        IF ( NMAJOR .EQ. 0 .AND.
-     &       NPING  .EQ. 0       ) THEN
-
-            MESG = 'No groups, major sources, or '//
-     &             'plume-in-grid sources.'
-            CALL M3EXIT( PROGNAME, 0, 0, MESG, 2 )
-
-        END IF
-
 C.........  Open output files
         CALL OPENEOUT( NGROUP, SDATE, STIME, ENAME, VFLAG, LFLAG,
      &                 PDEV, MNAME )
@@ -1234,7 +1260,7 @@ C.........  Write ASCII file
                     CSRC = CSOURC( S )
                     PLT = CSRC( PTBEGL3( 2 ):PTENDL3( 2 ) )
                     STK = CSRC( PTBEGL3( JSTACK ):PTENDL3( JSTACK ) )
-                    WRITE( PDEV, 93630 ) MS, PS, IGRP, IFIP( S ), 
+                    WRITE( PDEV, 93630 ) MS, PS, IGRP, CIFIP( S ), 
      &                  PLT, STK, MXEMIS( S,1 )
                 ELSE
                     WRITE( PDEV, 93620 ) MS, PS, IGRP
@@ -1300,7 +1326,7 @@ C...........   Formatted file I/O formats............ 93xxx
 
 93620   FORMAT( 3(I8,1X) )
 
-93630   FORMAT( 3(I8,1X), I6.5, 1X, 2(A15,1X), F10.3 )
+93630   FORMAT( 3(I8,1X), A, 1X, 2(A20,1X), F10.3 )
 
 C...........   Internal buffering formats............ 94xxx
 
@@ -1342,7 +1368,7 @@ C.............  Subprogram arguments
             CHARACTER(*), INTENT(IN):: TYPES  ( NORS, MXAND, NV ) ! Condition
             LOGICAL     , INTENT(IN):: STATUS ( NORS, MXAND, NV ) ! true: condition met
 
-            INTEGER, PARAMETER :: NHEADER  = 16
+            INTEGER, PARAMETER :: NHEADER  = 17
             CHARACTER(15), PARAMETER :: HEADERS( NHEADER ) = 
      &                              ( / 'Source ID      ',
      &                                  'Region         ',
@@ -1352,6 +1378,7 @@ C.............  Subprogram arguments
      &                                  'Char 3         ',
      &                                  'Char 4         ',
      &                                  'Char 5         ',
+     &                                  'NAICS          ',
      &                                  'Plt Name       ',
      &                                  'Elevstat       ',
      &                                  'Group          ',
@@ -1372,12 +1399,12 @@ C.............  Local subprogram variables
             INTEGER      K, L, L1, L2, M, N  ! indices and counters
             INTEGER      MX                 ! max of MXPNGCHK and MXELVCHK
             INTEGER      NC                 ! local no. of src chars to output
-            INTEGER      NM                 ! local no. of max vals before emis
+            INTEGER   :: NM = 0             ! local no. of max vals before emis
 
             LOGICAL      DFLAG              ! true: OR was true
             LOGICAL   :: FIRSTIME = .TRUE.  ! true: first time subprogram called
 
-            CHARACTER(512) BUFFER
+            CHARACTER(1014) BUFFER
             CHARACTER(256) FMTBUF
 
 C----------------------------------------------------------------------
@@ -1458,10 +1485,6 @@ C.................  Add results onto header
 C.................  Write out header
                 WRITE( FDEV, '(A)' ) TRIM( BUFFER )
 
-                L1 = LEN_TRIM( BUFFER )
-                BUFFER =  REPEAT( '-', L1 )
-                WRITE( FDEV, '(A)' ) TRIM( BUFFER )
-
                 FIRSTIME = .FALSE.
 
             END IF
@@ -1472,17 +1495,17 @@ C.............  Subdivide source description
 
 C.............  Write source information format and then use format
             WRITE( FMTBUF, 94790 ) FIPLEN3, PLTLEN3, 
-     &           ( CHRLEN3, N=1,NCHARS-2 ), DSCLEN3
+     &           ( CHRLEN3, N=1,NCHARS-2 ), NAILEN3, DSCLEN3
             FMTBUF = TRIM( FMTBUF ) // ')'
 
             WRITE( BUFFER, FMTBUF ) S, ( CHARS( N ), N = 1, NCHARS ), 
-     &                              CPDESC( S )
+     &                              CNAICS( S ), CPDESC( S )
             
 C.............  Add label, group number, stack parameters, and emissions
             WRITE( BUFFER, 94791 ) TRIM( BUFFER ), LABEL, IGRP,
      &             VALS( HT_IDX ), VALS( DM_IDX ), VALS( TK_IDX ),
      &             VALS( VE_IDX ), VALS( FL_IDX )
-            
+
 C.............  If needed, add plume rise value
             IF ( LCUTOFF ) THEN
                 WRITE( BUFFER, 94792 ) TRIM( BUFFER ), RISE( S )
@@ -1565,7 +1588,7 @@ C.............  Write buffer to report file
 
 C---------------------  FORMAT  STATEMENTS  -------------------------
 
-94790       FORMAT( '(I7,";",A', I1, ',";"', 10(',A', I2.2,',";"') )
+94790       FORMAT( '(I7,";",A', I2.2, ',";"', 10(',A', I2.2,',";"') )
 
 94791       FORMAT( A, 1X, A1, '; ', I6, ';', 5( F10.2, ';' ) )
 

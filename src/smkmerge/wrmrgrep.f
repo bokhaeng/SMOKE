@@ -106,7 +106,10 @@ C...........   Other local variables
 
         INTEGER          C, F, I, J, K, L, L2, N, V  ! counters and indices
         INTEGER          IOS            ! i/o status
-        INTEGER          KA, KB, KM, KP ! tmp search indices
+        INTEGER       :: KA = 0         ! tmp search indices
+        INTEGER       :: KB = 0         ! tmp search indices
+        INTEGER       :: KM = 0         ! tmp search indices
+        INTEGER       :: KP = 0         ! tmp search indices
         INTEGER, SAVE :: MAXCYWID       ! max width of county names
         INTEGER, SAVE :: MAXSTWID       ! max width of state names
         INTEGER, SAVE :: NC             ! tmp no. counties in domain
@@ -319,7 +322,7 @@ C.........  Do not report if this time is not appropriate
 
 C.............  If required, create and write state totals, either controlled
 C               or uncontrolled, depending on sector and which are controlled.
-	IF ( LREPSTA ) THEN  
+        IF ( LREPSTA ) THEN  
 
 C.............  Controlled area sources
             IF( ( AUFLAG .OR. ARFLAG ) .AND. LREPCTL ) THEN
@@ -533,15 +536,18 @@ C.............  Subprogram arguments
 
 C.............  Local variables
             INTEGER  I, J, N
-            INTEGER  PSTA, STA
+            
+            CHARACTER(FIPLEN3) PSTA, STA
 
 C..............................................................................
 
-            PSTA = -9
+            PSTA = ' '
             N = 0
             DO I = 1, NC
 
-                STA = CNTYCOD( I ) / 1000
+
+                STA = CNTYCOD( I )
+                STA( FIPLEN3-2:FIPLEN3 ) = '000'
                 IF( STA .NE. PSTA ) THEN
                     N = N + 1
                     PSTA = STA
@@ -805,11 +811,11 @@ C.............  Arrays allocated by subprogram argument
 
 C.............  Local variables
             INTEGER       I, J, L, L1, L2, N
-            INTEGER       PSTA, STA
 
             REAL          VAL
 
             CHARACTER(FIPLEN3+8) CDATFIP
+            CHARACTER(FIPLEN3) PSTA, STA
             CHARACTER(60) :: HDRBUF  = '#'
             CHARACTER(60) :: STLABEL = '# County'
             CHARACTER(30)    BUFFER
@@ -850,18 +856,19 @@ C.............  Write line
 c            WRITE( FDEV, '(A)' ) LINFLD( 1:L2 )
 
 C.............  Write county total emissions
-            PSTA = -9
+            PSTA = ' '
             N = 0
             DO I = 1, NC
 
-                STA = CNTYCOD( I ) / 1000
+                STA = CNTYCOD( I )
+                STA( FIPLEN3-2:FIPLEN3 ) = '000'
                 IF( STA .NE. PSTA ) THEN
                     N = N + 1
                     PSTA = STA
                 END IF
 
 C.................  Write out county name and converted emissions
-                WRITE( CDATFIP, '(I7.7,1X,I6.6)' ) JDATE, CNTYCOD( I )
+                WRITE( CDATFIP, '(I7.7,1X,A)' ) JDATE, CNTYCOD( I )
 
 C.................  Build output format depending on data values
                 CALL DYNAMIC_FORMATS( NC, NDIM, I, CY_EMIS,
